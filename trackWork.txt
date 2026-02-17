@@ -1,135 +1,83 @@
-### What we’ve completed so far (simple points)
+### What we’ve done till now (completed)
 
-1. **Infra is ready**
+* Project workspace created: `D:\factoryflow`
+* Infra running via Docker Compose:
 
-   * Postgres (database) runs in Docker.
-   * MinIO (file storage) runs in Docker.
+  * Postgres (`ff_postgres`)
+  * MinIO (`ff_minio`)
+* Backend created with NestJS in `services/api`
+* Config + env wiring done (Nest `ConfigModule`)
+* Database layer working with TypeORM + Postgres
+* Core entities created and tables auto-created:
 
-2. **Backend API is running (NestJS)**
+  * `User` (ADMIN / MANAGER / USER + plantIds)
+  * `Plant`
+  * Forms domain (at least):
 
-   * Connects to Postgres using TypeORM.
-   * Auto-creates tables for `User` and `Plant` (since `synchronize: true`).
+    * `form_template`
+    * `form_field`
+    * `form_submission` + answers (in progress, but submission flow is now being fixed)
+* Auth system working:
 
-3. **Authentication is working**
+  * `/auth/login` returns JWT
+  * JWT guard works (no token → blocked)
+  * Role-based guards working (ADMIN endpoints protected)
+* Admin flow working:
 
-   * `/auth/login` returns a **JWT access token**.
-   * Token is required for protected APIs.
+  * Create plant
+  * Create manager with plant assignment
+  * Create form template (DRAFT)
+  * List forms
+  * Publish form
+* Mobile flow working (at least listing published forms):
 
-4. **Roles + authorization rules are working**
+  * `GET /mobile/forms?plantId=...` returns published templates + fields
+* Swagger UI added and working:
 
-   * **Admin-only** endpoints work.
-   * **Manager-only** endpoints work.
-   * Without token → **401**
-   * Wrong role → **403**
+  * Global Bearer token auth works in Swagger
 
-5. **Core business flows are done**
+### What’s left (next scope)
 
-   * Admin can create plants.
-   * Admin can create managers and assign plant(s).
-   * Manager can create users only for assigned plants.
-   * Users/Managers/Admin login works.
+Backend (core MVP):
 
-6. **Git is set**
+* Fix + finish submission creation end-to-end:
 
-   * Single repo at `D:\factoryflow`
-   * Pushed to GitHub on `main`
-   * `.env.example` created and `.env` is ignored
+  * store `templateVersion` properly
+  * store answers correctly
+  * return submission response cleanly
+* Submission listing endpoints:
 
----
+  * Manager: list submissions by plant + status (SUBMITTED/APPROVED/REJECTED)
+  * User: list “my submissions”
+* Approval workflow:
 
-## Next scope (what we should build next)
+  * Approve submission
+  * Reject submission with reason/comment
+  * Audit fields: approvedBy, approvedAt, rejectedBy, rejectedAt
+* Validation rules:
 
-Now we enter the *real product*: **Form Builder + Submission + Approval + Dashboard**.
+  * Field type validation (checkbox must be boolean, number must be number, etc.)
+  * Required fields enforcement
+* Access control rules:
 
-In order, the next modules are:
+  * Admin can see everything
+  * Manager can only see assigned plants
+  * User can only submit for assigned plants and see own submissions
 
-1. **Forms (Admin creates form templates)**
-2. **Submissions (Users fill forms on mobile/web)**
-3. **Approvals (Managers approve/reject submissions)**
-4. **Dashboard (Admin sees stats, export, audits)**
+Quality / structure:
 
----
+* Replace `synchronize: true` with proper migrations later (production safety)
+* Add consistent error handling + logging
+* Add DTO swagger docs + examples everywhere
+* Add pagination for list APIs (forms, submissions)
+* Add basic unit tests for auth + forms
 
-## Your main question: “If admin creates form, those forms will be stored right? Every form is different… how?”
+Later phases:
 
-Yes — forms are stored, but **not as new database tables each time**.
-
-### The right industry approach (simple)
-
-You store a “form definition” as data, like this:
-
-#### 1) FormTemplate (the blueprint)
-
-Example: “Daily Safety Checklist”
-
-* id
-* title
-* plantId (optional)
-* version
-* createdByAdminId
-* status (draft/published)
-
-#### 2) FormField (the questions inside the form)
-
-Each template has many fields:
-
-* fieldId
-* label: “Is helmet worn?”
-* type: checkbox / text / number / dropdown / photo
-* required: true/false
-* options: (for dropdown)
-* order
-
-So admin “creates a form” = we save:
-
-* one row in **form_templates**
-* many rows in **form_fields**
-
-That’s the “one click create” you mean: it becomes stored instantly.
-
-#### 3) FormSubmission (filled data)
-
-When user fills the form, we save:
-
-* submissionId
-* templateId + version
-* submittedByUserId
-* plantId
-* status: submitted/approved/rejected
-* submittedAt
-
-#### 4) SubmissionAnswer (actual answers)
-
-Each answer saved as:
-
-* submissionId
-* fieldId
-* value (stored as text/json)
-* attachments (if any)
-
-So every form can be different because **the structure is stored as rows**, not as new tables.
+* Form builder UI (web)
+* Mobile app (React Native) to render forms dynamically
+* Excel upload/import
+* File/photo attachments to MinIO
+* Dashboard analytics
 
 ---
-
-## What we build next (tight plan)
-
-Next we implement:
-
-1. **Admin endpoints**
-
-   * `POST /forms` (create form template + fields)
-   * `GET /forms` (list)
-   * `POST /forms/:id/publish` (lock version)
-
-2. **User endpoints**
-
-   * `GET /forms/assigned` (forms user can fill)
-   * `POST /forms/:id/submissions` (submit answers)
-
-3. **Manager endpoints**
-
-   * `GET /approvals` (pending submissions)
-   * `POST /submissions/:id/approve`
-   * `POST /submissions/:id/reject`
-
-If you’re aligned with this model, next message I’ll give you the **DB entities + module skeleton for Forms** (clean structure, scalable).
