@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: ff_postgres
+    environment:
+      POSTGRES_USER: ff_user
+      POSTGRES_PASSWORD: ff_pass
+      POSTGRES_DB: factoryflow
+      POSTGRES_HOST_AUTH_METHOD: trust
+
+    ports:
+      - "5433:5432"
+    volumes:
+      - ff_pgdata:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio:latest
+    container_name: ff_minio
+    environment:
+      MINIO_ROOT_USER: ff_minio
+      MINIO_ROOT_PASSWORD: ff_minio_pass
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ff_minio_data:/data
+
+volumes:
+  ff_pgdata:
+  ff_minio_data:
+
+
+# What each part does (simple)
+
+# postgres: → starts a Postgres database container
+
+# POSTGRES_USER / PASSWORD / DB → sets default login + database name
+
+# ports "5432:5432" → makes DB accessible from your laptop using port 5432
+
+# volumes → saves data permanently (so if container restarts, your DB data stays)
+
+# minio: → starts MinIO storage
+
+# 9000 is API port, 9001 is the web console
+
+# MinIO credentials set by MINIO_ROOT_USER/PASSWORD
+
+# volumes keep uploaded files safe locally
+
+
+
+
+# Running this file : configs:
+# docker compose up -d
+# Meaning
+
+# up → start services
+
+# -d → run in background (so your terminal is free)
