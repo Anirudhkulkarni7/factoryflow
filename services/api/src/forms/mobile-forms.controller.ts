@@ -93,17 +93,6 @@ getSubmission(
 
 
 
-@Get("my-submissions")
-listMySubmissions(
-  @CurrentUser() me: JwtPayload,
-  @Query("status") status?: "SUBMITTED" | "APPROVED" | "REJECTED",
-) {
-  return this.forms.listMySubmissions({
-    userId: me.sub,
-    status,
-  });
-}
-
 
 @Post("submissions/:id/approve")
 @Roles("ADMIN", "MANAGER")

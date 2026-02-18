@@ -370,5 +370,72 @@ async getSubmissionById(input: {
 }
 
 
+async getTemplateById(id: string) {
+  const t = await this.templates.findOne({
+    where: { id },
+    relations: { fields: true },
+  });
+  if (!t) throw new BadRequestException("Form not found");
+  return t;
+}
+
+
+async updateTemplate(input: {
+  id: string;
+  updaterUserId: string;
+  title?: string;
+  plantIds?: string[];
+  fields?: Array<{ label: string; type: string; required: boolean; config?: Record<string, unknown> }>;
+}) {
+  const t = await this.templates.findOne({ where: { id: input.id }, relations: { fields: true } });
+  if (!t) throw new BadRequestException("Form not found");
+
+  if (t.status !== "DRAFT") {
+    throw new BadRequestException("Only DRAFT forms can be edited");
+  }
+
+  if (input.plantIds) {
+    const count = await this.plants.count({ where: { id: In(input.plantIds) } });
+    if (count !== input.plantIds.length) throw new BadRequestException("Invalid plantIds");
+    t.plantIds = input.plantIds;
+  }
+
+  if (typeof input.title === "string") t.title = input.title;
+
+  // Replace fields fully (simple MVP)
+  if (input.fields) {
+    // delete old fields
+    await this.fields.delete({ templateId: t.id });
+
+    const newFields = input.fields.map((f, idx) =>
+      this.fields.create({
+        templateId: t.id,
+        label: f.label,
+        type: f.type as any,
+        required: f.required,
+        order: idx + 1,
+        config: f.config,
+      }),
+    );
+    await this.fields.save(newFields);
+  }
+
+  await this.templates.save(t);
+
+  return this.templates.findOne({
+    where: { id: t.id },
+    relations: { fields: true },
+  });
+}
+
+
+async archiveTemplate(id: string) {
+  const t = await this.templates.findOne({ where: { id } });
+  if (!t) throw new BadRequestException("Form not found");
+
+  t.status = "ARCHIVED";
+  return this.templates.save(t);
+}
+
 
 }

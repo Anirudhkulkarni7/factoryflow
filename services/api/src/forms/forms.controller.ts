@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Patch,
   UseGuards,
 } from "@nestjs/common";
 
@@ -16,6 +17,8 @@ import type { JwtPayload } from '../auth/jwt.strategy';
 
 import { CreateFormDto } from './dto/create-form.dto';
 import { FormsService } from './forms.service';
+import { UpdateFormDto } from "./dto/update-form.dto";
+
 
 @Controller('forms')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -42,4 +45,29 @@ export class FormsController {
   publish(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.forms.publish(id);
   }
+
+    @Get(':id')
+  getOne(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+    return this.forms.getTemplateById(id);
+  }
+
+  @Patch(':id')
+update(
+  @CurrentUser() me: JwtPayload,
+  @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  @Body() dto: UpdateFormDto,
+) {
+  return this.forms.updateTemplate({
+    id,
+    updaterUserId: me.sub,
+    ...dto,
+  });
+}
+
+@Post(':id/archive')
+archive(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+  return this.forms.archiveTemplate(id);
+}
+
+
 }
