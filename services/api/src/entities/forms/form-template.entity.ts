@@ -21,8 +21,11 @@ export class FormTemplate {
   @Column({ type: "varchar", default: "DRAFT" })
   status!: FormStatus;
 
-  @Column({ type: "int", default: 1 })
-  version!: number;
+ @Column({ type: "uuid" })
+familyId!: string;
+
+@Column({ type: "int", default: 1 })
+version!: number;
 
   @Column({ type: "uuid" })
   createdByUserId!: string;

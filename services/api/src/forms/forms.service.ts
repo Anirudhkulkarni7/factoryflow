@@ -22,7 +22,7 @@ export class FormsService {
   ) {}
 
   private validateAnswerValue(field: FormField, value: unknown) {
-    if (value === undefined) return; // optional field might be omitted
+    if (value === undefined) return; //optional rakhahe
     if (value === null) return; // allow null for non-required fields
 
     switch (field.type) {
@@ -90,7 +90,6 @@ export class FormsService {
       if (count !== input.plantIds.length)
         throw new BadRequestException('Invalid plantIds');
     }
-
     const template = this.templates.create({
       title: input.title,
       plantIds: input.plantIds,
@@ -100,6 +99,11 @@ export class FormsService {
     });
 
     const savedTemplate = await this.templates.save(template);
+    savedTemplate.familyId = savedTemplate.id;
+    await this.templates.update(
+      { id: savedTemplate.id },
+      { familyId: savedTemplate.id },
+    );
 
     const fieldEntities = input.fields.map((f, idx) =>
       this.fields.create({
@@ -161,7 +165,7 @@ export class FormsService {
   }
 
   async listPublishedForPlant(plantId: string) {
-    return this.templates
+    const all = await this.templates
       .createQueryBuilder('t')
       .leftJoinAndSelect('t.fields', 'f')
       .where('t.status = :status', { status: 'PUBLISHED' })
@@ -169,10 +173,26 @@ export class FormsService {
         '(cardinality(t."plantIds") = 0 OR t."plantIds" @> ARRAY[:plantId]::text[])',
         { plantId },
       )
-      .orderBy('t.createdAt', 'DESC')
       .addOrderBy('f.order', 'ASC')
       .getMany();
+
+    // "Daily Safety Checklist v2" -> "Daily Safety Checklist"
+    const latestByFamily = new Map<string, (typeof all)[number]>();
+
+    for (const t of all) {
+      const key = t.familyId ?? t.id; // fallback for old data
+      const existing = latestByFamily.get(key);
+
+      if (!existing || t.version > existing.version) {
+        latestByFamily.set(key, t);
+      }
+    }
+
+    return Array.from(latestByFamily.values()).sort(
+      (a, b) => b.version - a.version,
+    );
   }
+
   async createSubmission(input: {
     userId: string;
     role: string;
@@ -505,12 +525,25 @@ export class FormsService {
       const templateRepo = tx.getRepository(FormTemplate);
       const fieldRepo = tx.getRepository(FormField);
 
+      // decide familyId (for old rows where familyId may be null)
+      const familyId = t.familyId ?? t.id;
+
+      // find max version in this family
+      const row = await templateRepo
+        .createQueryBuilder('tt')
+        .select('MAX(tt.version)', 'max')
+        .where('tt.familyId = :familyId', { familyId })
+        .getRawOne<{ max: string | null }>();
+
+      const nextVersion = (row?.max ? Number(row.max) : (t.version ?? 1)) + 1;
+
       const cloned = templateRepo.create({
         title: t.title,
         plantIds: t.plantIds ?? [],
-        createdByUserId: t.createdByUserId, // keep original creator (or you can change later)
+        createdByUserId: t.createdByUserId,
         status: 'DRAFT',
-        version: (t.version ?? 1) + 1,
+        familyId,
+        version: nextVersion,
       });
 
       const savedTemplate = await templateRepo.save(cloned);
@@ -519,13 +552,12 @@ export class FormsService {
         .sort((a, b) => a.order - b.order)
         .map((f) =>
           fieldRepo.create({
-            template: savedTemplate,
             templateId: savedTemplate.id,
             label: f.label,
             type: f.type,
             required: f.required,
             order: f.order,
-            config: f.config ?? undefined,
+            config: f.config ?? null,
           }),
         );
 
