@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Query,
   Post,
   Patch,
   UseGuards,
@@ -18,6 +19,8 @@ import type { JwtPayload } from '../auth/jwt.strategy';
 import { CreateFormDto } from './dto/create-form.dto';
 import { FormsService } from './forms.service';
 import { UpdateFormDto } from "./dto/update-form.dto";
+import { ListFormsQueryDto } from "./dto/list-forms.query";
+
 
 
 @Controller('forms')
@@ -36,10 +39,10 @@ export class FormsController {
     });
   }
 
-  @Get()
-  list() {
-    return this.forms.list();
-  }
+@Get()
+list(@Query() q: ListFormsQueryDto) {
+  return this.forms.list(q);
+}
 
   @Post(':id/publish')
   publish(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
@@ -56,21 +59,25 @@ export class FormsController {
 
   @Patch(':id')
 update(
-  @CurrentUser() me: JwtPayload,
   @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   @Body() dto: UpdateFormDto,
 ) {
   return this.forms.updateTemplate({
     id,
-    updaterUserId: me.sub,
     ...dto,
   });
 }
+
 
 @Post(':id/archive')
 archive(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
   return this.forms.archiveTemplate(id);
 }
 
+  @Post(':id/clone')
+  clone(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+    return this.forms.cloneTemplate(id);
+  }
 
+  
 }

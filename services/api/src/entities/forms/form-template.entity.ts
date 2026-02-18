@@ -30,8 +30,8 @@ export class FormTemplate {
   @Column("text", { array: true, default: () => "ARRAY[]::text[]" })
   plantIds!: string[];
 
-  @OneToMany(() => FormField, (f) => f.template, { cascade: true })
-  fields!: FormField[];
+@OneToMany(() => FormField, (f) => f.template)
+fields!: FormField[];
 
   @CreateDateColumn()
   createdAt!: Date;

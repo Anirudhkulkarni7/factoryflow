@@ -1,195 +1,205 @@
-### What we’ve done till now (completed)
+Yes bro — **this is perfect** ✅
 
-* Project workspace created: `D:\factoryflow`
-* Infra running via Docker Compose:
+Your PATCH worked, and the response confirms:
+
+* template is still **DRAFT** (good, editable state)
+* title updated to **v2**
+* fields replaced correctly (Helmet, Notes, Temperature)
+* **templateId is correctly set** for every field (no more null crash)
+
+---
+
+## ✅ Complete application status (what we have DONE)
+
+### Infra + project setup
+
+* Workspace created: `D:\FactoryFlow`
+* Docker Compose running:
 
   * Postgres (`ff_postgres`)
-  * MinIO (`ff_minio`)
-* Backend created with NestJS in `services/api`
-* Config + env wiring done (Nest `ConfigModule`)  
-* Database layer working with TypeORM + Postgres
-* Core entities created and tables auto-created:
+  * MinIO (`ff_minio`) (ready for future file/photo uploads)
+* Backend NestJS created: `services/api`
+* `.env` + `ConfigModule` setup (global)
+* TypeORM connected with Postgres
+* Swagger enabled + JWT Bearer auth works in Swagger
 
-  * `User` (ADMIN / MANAGER / USER + plantIds)
-  * `Plant`
-  * Forms domain (at least):
+### Auth + RBAC (roles)
 
-    * `form_template`
-    * `form_field`
-    * `form_submission` + answers (in progress, but submission flow is now being fixed)
-* Auth system working:
+* `/auth/login` returns JWT accessToken
+* JWT guard blocks without token
+* Role guard works
+* Roles supported: **ADMIN / MANAGER / USER**
+* Plant-based access implemented (non-admin restricted to their plants)
 
-  * `/auth/login` returns JWT
-  * JWT guard works (no token → blocked)
-  * Role-based guards working (ADMIN endpoints protected)
-* Admin flow working:
+### Core entities + DB tables created
 
-  * Create plant
-  * Create manager with plant assignment
-  * Create form template (DRAFT)
-  * List forms
-  * Publish form
-* Mobile flow working (at least listing published forms):
+* `User`
+* `Plant`
+* Forms domain:
 
-  * `GET /mobile/forms?plantId=...` returns published templates + fields
-* Swagger UI added and working:
+  * `FormTemplate`
+  * `FormField`
+  * `FormSubmission`
+  * `SubmissionAnswer`
 
-  * Global Bearer token auth works in Swagger
+### Admin forms lifecycle (working)
 
-### What’s left (next scope)
+* ✅ Create form template (DRAFT)
+* ✅ List forms (with pagination + search + status filter)
+* ✅ Get form by id
+* ✅ Publish form
+* ✅ Archive form
+* ✅ Clone published form → creates new **DRAFT v2** (best scalable approach)
+* ✅ Edit only DRAFT forms (PATCH works)
 
-Backend (core MVP):
+### Mobile / submissions (working)
 
-* Fix + finish submission creation end-to-end:
+* ✅ `GET /mobile/forms?plantId=...` → published forms + fields
+* ✅ `POST /mobile/forms/submissions` → create submission + answers
+* ✅ Type validation added:
 
-  * store `templateVersion` properly
-  * store answers correctly
-  * return submission response cleanly
-* Submission listing endpoints:
+  * TEXT must be string
+  * NUMBER must be number
+  * CHECKBOX must be boolean
+  * DATE must be ISO date string
+  * PHOTO must be file key string (placeholder for MinIO later)
+  * DROPDOWN must be string (options validation later)
+* ✅ List submissions with:
 
-  * Manager: list submissions by plant + status (SUBMITTED/APPROVED/REJECTED)
-  * User: list “my submissions”
-* Approval workflow:
+  * pagination
+  * search (`q`)
+  * filters (`status`, `plantId`)
+  * sorting (`sortBy`, `sortDir`)
+* ✅ Review workflow:
 
-  * Approve submission
-  * Reject submission with reason/comment
-  * Audit fields: approvedBy, approvedAt, rejectedBy, rejectedAt
-* Validation rules:
+  * approve (ADMIN/MANAGER only)
+  * reject with reason (ADMIN/MANAGER only)
+* ✅ Access control:
 
-  * Field type validation (checkbox must be boolean, number must be number, etc.)
-  * Required fields enforcement
-* Access control rules:
+  * ADMIN sees all
+  * MANAGER sees only assigned plant submissions
+  * USER sees only their submissions
+* ✅ “my submissions” endpoint works
 
-  * Admin can see everything
-  * Manager can only see assigned plants
-  * User can only submit for assigned plants and see own submissions
+### Git + merge
 
-Quality / structure:
-
-* Replace `synchronize: true` with proper migrations later (production safety)
-* Add consistent error handling + logging
-* Add DTO swagger docs + examples everywhere
-* Add pagination for list APIs (forms, submissions)
-* Add basic unit tests for auth + forms
-
-Later phases:
-
-* Form builder UI (web)
-* Mobile app (React Native) to render forms dynamically
-* Excel upload/import
-* File/photo attachments to MinIO
-* Dashboard analytics
+* ✅ feat/forms merged into main
+* ✅ pushed to origin main
+* ✅ feat/forms deleted locally + remote
 
 ---
 
+## ❗ What is LEFT (backend MVP remaining)
 
-******************************************************************************************************
+### 1) Tighten validation rules (MVP hardening)
 
+* Dropdown options validation using `field.config.options`
+* Required field enforcement already done ✅
+* For DATE: consider enforcing format `YYYY-MM-DD` (optional)
+* For NUMBER: allow strings? (right now strict number only – fine for API)
 
-18/02
+### 2) Submission response quality
 
+Right now you return answers with fieldId/value only.
+But for frontend it’s useful to return answers with **field label + type** also, like:
 
-### What we did till now (completed)
+* submission
+* template title/version
+* answers joined with field metadata
 
-* **Infra**
+### 3) Dashboard APIs (Admin/Manager)
 
-  * Docker Compose running for **Postgres** (`ff_postgres`) and **MinIO** (`ff_minio`)
-  * Fixed the “wrong Postgres on 5432” situation and connected backend to the correct DB port
+Backend endpoints needed for dashboard:
 
-* **Backend base**
+* Total submissions count
+* Status split: submitted/approved/rejected
+* Plant-wise summary
+* Recent submissions list
+  This is pure backend and will power any UI later.
 
-  * NestJS backend created in `services/api`
-  * `.env` + `ConfigModule` wiring done
-  * TypeORM connected + tables auto-created (`synchronize: true` for dev)
+### 4) Users CRUD (if you want full admin panel)
 
-* **Core domains working**
+Currently you have create users + assign plant via admin flow (already)
+Still missing:
 
-  * **Users + Plants**
+* List users (filter by role, plant)
+* Update user (role/plant assignments)
+* Disable user (soft delete or active flag)
 
-    * `User` entity with roles: `ADMIN / MANAGER / USER`
-    * `Plant` entity
-    * Admin can create plant, create manager, assign plantIds
-  * **Auth**
+### 5) Plants CRUD
 
-    * `/auth/login` works and returns JWT
-    * JWT guard blocks requests without token
-    * Role guard works (ADMIN-only endpoints protected)
+Similar:
 
-* **Forms domain working**
+* List plants
+* Update plant
+* Archive plant (optional)
 
-  * Entities created + persisted:
+### 6) Production safety (later but important)
 
-    * `form_template`, `form_field`
-    * `form_submission`, `submission_answer`
-  * Admin flow working:
+* Replace `synchronize: true` with migrations
+* Better error structure (global exception filter)
+* Logging (request logs + errors)
 
-    * Create form template (DRAFT)
-    * Publish form
-    * List forms
-  * Mobile flow working:
+### 7) Attachments / MinIO (later phase)
 
-    * List published forms for plant: `GET /mobile/forms?plantId=...`
-    * Create submission: `POST /mobile/forms/submissions`
-    * List submissions with filters: `GET /mobile/forms/submissions?status=...`
-    * “My submissions”: `GET /mobile/forms/submissions/mine`
-    * Approve / Reject endpoints added
-  * Added **type validation** for answers (TEXT/NUMBER/CHECKBOX/DATE/DROPDOWN/PHOTO basics)
-  * Wrapped submission + answers creation in a **DB transaction** (atomic write)
-
-* **Quality/Dev UX**
-
-  * Swagger added + bearer auth works
-  * Pagination shape added for submissions (returns `{ items, total, page, limit }`)
-  * Git repo created + pushed to GitHub, feature branching used (`feat/forms` etc.)
+* Upload endpoint to MinIO
+* Return file key
+* PHOTO field will store that key in answers
 
 ---
 
-### What’s next (recommended next scope)
+## ✅ What we should do NEXT (sequence)
 
-* **1) Lock down access rules properly**
+Here’s the clean order (best MVP-first path):
 
-  * Manager can only review submissions for their plants
-  * User can only submit for their plants + only see their own submissions
-  * Admin can do everything
-  * (This is mostly done, but we should double-check edge cases)
+### Step 1 — Finish “form lifecycle” fully
 
-* **2) Finish “review workflow” cleanly**
+1. Clone → Patch DRAFT → Publish v2
+2. Ensure old published stays as v1 and new publish becomes v2
 
-  * Prevent rejecting an already APPROVED submission and vice-versa (state machine rules)
-  * Return consistent errors (400 vs 403)
-  * Add `reviewedByUserId`, `reviewedAt`, `rejectReason` always correctly set/cleared
+✅ You already cloned + patched.
+Next is: **publish the draft v2** and test mobile returns latest.
 
-* **3) Add pagination + search everywhere**
+### Step 2 — Add dashboard endpoints (ADMIN + MANAGER)
 
-  * Forms list pagination (admin + mobile)
-  * Submissions list pagination (already added, now extend with):
+* `/dashboard/summary?plantId=...`
+* `/dashboard/recent-submissions?plantId=...&status=...`
+  This will make your backend MVP feel “complete” because now you can build UI anytime.
 
-    * search by template title (needs join)
-    * date range filters (submittedAt from/to)
-    * plantId filter (already exists)
+### Step 3 — Users list/update APIs (admin panel ready)
 
-* **4) Improve validation**
+* list users (pagination + search)
+* update role/plantIds
+* deactivate user
 
-  * Enforce required fields must have non-null value
-  * Dropdown: validate option exists in `field.config.options`
-  * Photo: validate value format (later: integrate MinIO upload flow)
+### Step 4 — MinIO upload API (only if needed now)
 
-* **5) Production-safety upgrades**
+* only required if mobile will submit PHOTO fields soon
 
-  * Replace `synchronize: true` with **migrations**
-  * Centralized error format (global exception filter)
-  * Basic logging (request id + audit log for review actions)
+---
 
-* **6) Testing**
+## ✅ Next command to run (now)
 
-  * E2E tests for:
+Since your draft is ready, publish it:
 
-    * login
-    * create/publish form
-    * create submission
-    * approve/reject
-    * permission checks
+```powershell
+Invoke-WebRequest -UseBasicParsing -Method POST `
+  -Uri "http://localhost:3000/forms/$draftTemplateId/publish" `
+  -Headers @{ Authorization = "Bearer $adminToken" } |
+  Select-Object -ExpandProperty Content
+```
 
-That’s the clean “backend MVP completion path”: make it correct, safe, testable, then scale it.
+Then verify mobile forms:
 
-When you’re ready to start next, the best next step is **tightening review workflow + state machine + permission edge cases**, because that’s where bugs hide and it affects everything downstream.
+```powershell
+Invoke-WebRequest -UseBasicParsing -Method GET `
+  -Uri "http://localhost:3000/mobile/forms?plantId=$plantId" `
+  -Headers @{ Authorization = "Bearer $mgrToken" } |
+  Select-Object -ExpandProperty Content
+```
+
+You should see the latest published one.
+
+---
+
+Next we’ll start the **dashboard endpoints** (fast + very useful + backend-only).

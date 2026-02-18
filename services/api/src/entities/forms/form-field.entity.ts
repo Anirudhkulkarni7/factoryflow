@@ -32,6 +32,8 @@ export class FormField {
   @Column({ type: "int" })
   order!: number;
 
-  @Column({ type: "jsonb", nullable: true })
-  config?: Record<string, unknown>;
+  
+@Column({ type: "jsonb", nullable: true })
+config: Record<string, unknown> | null = null;
+
 }
