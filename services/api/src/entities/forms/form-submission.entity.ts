@@ -29,7 +29,18 @@ export class FormSubmission {
   @Column({ type: "varchar", default: "SUBMITTED" })
   status!: SubmissionStatus;
 
-@OneToMany(() => SubmissionAnswer, (a: SubmissionAnswer) => a.submission, { cascade: true })
+  @Column({ type: "uuid", nullable: true })
+  reviewedByUserId?: string;
+
+  @Column({ type: "timestamp", nullable: true })
+  reviewedAt?: Date;
+
+  
+@Column({ type: "varchar", nullable: true })
+rejectReason: string | null = null;
+
+
+  @OneToMany(() => SubmissionAnswer, (a: SubmissionAnswer) => a.submission, { cascade: true })
   answers!: SubmissionAnswer[];
 
   @CreateDateColumn()

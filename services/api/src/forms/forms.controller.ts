@@ -6,7 +6,7 @@ import {
   ParseUUIDPipe,
   Post,
   UseGuards,
-} from '@nestjs/common';
+} from "@nestjs/common";
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';

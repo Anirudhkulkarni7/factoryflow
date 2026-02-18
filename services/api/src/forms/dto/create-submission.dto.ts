@@ -1,10 +1,11 @@
-import { IsArray, IsUUID, ValidateNested } from "class-validator";
+import { Allow, IsArray, IsUUID, ValidateNested } from "class-validator";
 import { Type } from "class-transformer";
 
 class SubmissionAnswerDto {
   @IsUUID()
   fieldId!: string;
 
+  @Allow()
   value!: unknown;
 }
 

@@ -6,7 +6,7 @@
   * Postgres (`ff_postgres`)
   * MinIO (`ff_minio`)
 * Backend created with NestJS in `services/api`
-* Config + env wiring done (Nest `ConfigModule`)
+* Config + env wiring done (Nest `ConfigModule`)  
 * Database layer working with TypeORM + Postgres
 * Core entities created and tables auto-created:
 
@@ -81,3 +81,115 @@ Later phases:
 * Dashboard analytics
 
 ---
+
+
+******************************************************************************************************
+
+
+18/02
+
+
+### What we did till now (completed)
+
+* **Infra**
+
+  * Docker Compose running for **Postgres** (`ff_postgres`) and **MinIO** (`ff_minio`)
+  * Fixed the “wrong Postgres on 5432” situation and connected backend to the correct DB port
+
+* **Backend base**
+
+  * NestJS backend created in `services/api`
+  * `.env` + `ConfigModule` wiring done
+  * TypeORM connected + tables auto-created (`synchronize: true` for dev)
+
+* **Core domains working**
+
+  * **Users + Plants**
+
+    * `User` entity with roles: `ADMIN / MANAGER / USER`
+    * `Plant` entity
+    * Admin can create plant, create manager, assign plantIds
+  * **Auth**
+
+    * `/auth/login` works and returns JWT
+    * JWT guard blocks requests without token
+    * Role guard works (ADMIN-only endpoints protected)
+
+* **Forms domain working**
+
+  * Entities created + persisted:
+
+    * `form_template`, `form_field`
+    * `form_submission`, `submission_answer`
+  * Admin flow working:
+
+    * Create form template (DRAFT)
+    * Publish form
+    * List forms
+  * Mobile flow working:
+
+    * List published forms for plant: `GET /mobile/forms?plantId=...`
+    * Create submission: `POST /mobile/forms/submissions`
+    * List submissions with filters: `GET /mobile/forms/submissions?status=...`
+    * “My submissions”: `GET /mobile/forms/submissions/mine`
+    * Approve / Reject endpoints added
+  * Added **type validation** for answers (TEXT/NUMBER/CHECKBOX/DATE/DROPDOWN/PHOTO basics)
+  * Wrapped submission + answers creation in a **DB transaction** (atomic write)
+
+* **Quality/Dev UX**
+
+  * Swagger added + bearer auth works
+  * Pagination shape added for submissions (returns `{ items, total, page, limit }`)
+  * Git repo created + pushed to GitHub, feature branching used (`feat/forms` etc.)
+
+---
+
+### What’s next (recommended next scope)
+
+* **1) Lock down access rules properly**
+
+  * Manager can only review submissions for their plants
+  * User can only submit for their plants + only see their own submissions
+  * Admin can do everything
+  * (This is mostly done, but we should double-check edge cases)
+
+* **2) Finish “review workflow” cleanly**
+
+  * Prevent rejecting an already APPROVED submission and vice-versa (state machine rules)
+  * Return consistent errors (400 vs 403)
+  * Add `reviewedByUserId`, `reviewedAt`, `rejectReason` always correctly set/cleared
+
+* **3) Add pagination + search everywhere**
+
+  * Forms list pagination (admin + mobile)
+  * Submissions list pagination (already added, now extend with):
+
+    * search by template title (needs join)
+    * date range filters (submittedAt from/to)
+    * plantId filter (already exists)
+
+* **4) Improve validation**
+
+  * Enforce required fields must have non-null value
+  * Dropdown: validate option exists in `field.config.options`
+  * Photo: validate value format (later: integrate MinIO upload flow)
+
+* **5) Production-safety upgrades**
+
+  * Replace `synchronize: true` with **migrations**
+  * Centralized error format (global exception filter)
+  * Basic logging (request id + audit log for review actions)
+
+* **6) Testing**
+
+  * E2E tests for:
+
+    * login
+    * create/publish form
+    * create submission
+    * approve/reject
+    * permission checks
+
+That’s the clean “backend MVP completion path”: make it correct, safe, testable, then scale it.
+
+When you’re ready to start next, the best next step is **tightening review workflow + state machine + permission edge cases**, because that’s where bugs hide and it affects everything downstream.
