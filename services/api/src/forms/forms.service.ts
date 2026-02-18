@@ -370,14 +370,7 @@ async getSubmissionById(input: {
 }
 
 
-async getTemplateById(id: string) {
-  const t = await this.templates.findOne({
-    where: { id },
-    relations: { fields: true },
-  });
-  if (!t) throw new BadRequestException("Form not found");
-  return t;
-}
+
 
 
 async updateTemplate(input: {
@@ -437,5 +430,14 @@ async archiveTemplate(id: string) {
   return this.templates.save(t);
 }
 
+async getTemplateById(id: string) {
+  const t = await this.templates.findOne({
+    where: { id },
+    relations: { fields: true },
+  });
+
+  if (!t) throw new BadRequestException("Form not found");
+  return t;
+}
 
 }
