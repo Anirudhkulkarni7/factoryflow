@@ -27,4 +27,7 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt!: Date;
+
+    @Column({ type: "boolean", default: true })
+  active!: boolean;
 }
