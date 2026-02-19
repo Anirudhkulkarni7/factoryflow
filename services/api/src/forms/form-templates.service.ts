@@ -5,6 +5,7 @@ import { DataSource, In, Repository } from "typeorm";
 import { Plant } from "src/entities/plant.entity";
 import { FormTemplate } from "src/entities/forms/form-template.entity";
 import { FormField } from "src/entities/forms/form-field.entity";
+import { randomUUID } from "crypto";
 
 @Injectable()
 export class FormTemplatesService {
@@ -36,18 +37,22 @@ export class FormTemplatesService {
       }
     }
 
-    const template = this.templates.create({
-      title: input.title,
-      plantIds: input.plantIds,
-      createdByUserId: input.createdByUserId,
-      status: "DRAFT",
-      version: 1,
-    });
+    const templateId = randomUUID();
 
-    const savedTemplate = await this.templates.save(template);
+const template = this.templates.create({
+  id: templateId,
+  familyId: templateId,
+  title: input.title,
+  plantIds: input.plantIds,
+  createdByUserId: input.createdByUserId,
+  status: "DRAFT",
+  version: 1,
+});
 
-    // set familyId = id for v1
-    await this.templates.update({ id: savedTemplate.id }, { familyId: savedTemplate.id });
+const savedTemplate = await this.templates.save(template);
+
+
+
 
     const fieldEntities = input.fields.map((f, idx) =>
       this.fields.create({

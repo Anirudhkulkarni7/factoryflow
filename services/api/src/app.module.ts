@@ -16,6 +16,7 @@ import { FormSubmission } from './entities/forms/form-submission.entity';
 import { SubmissionAnswer } from './entities/forms/submission-answer.entity';
 import { FormsModule } from './forms/forms.module';
 import { DashboardModule } from "./dashboard/dashboard.module";
+import { FilesModule } from "./files/files.module";
 
 @Module({
   imports: [
@@ -56,6 +57,7 @@ import { DashboardModule } from "./dashboard/dashboard.module";
     UsersModule,
     FormsModule,
     DashboardModule,
+    FilesModule,
 
   ],
   controllers: [AppController],
