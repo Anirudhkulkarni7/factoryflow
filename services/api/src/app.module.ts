@@ -26,13 +26,7 @@ import { FilesModule } from "./files/files.module";
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => {
         const pass = (cfg.get<string>('DB_PASS') ?? '').trim();
-        console.log('DB DEBUG', {
-          host: cfg.get<string>('DB_HOST'),
-          port: cfg.get<string>('DB_PORT'),
-          user: cfg.get<string>('DB_USER'),
-          pass: cfg.get<string>('DB_PASS'),
-          db: cfg.get<string>('DB_NAME'),
-        });
+       
         return {
           type: 'postgres',
           host: cfg.get<string>('DB_HOST'),

@@ -1,11 +1,11 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { DataSource, In, Repository } from "typeorm";
+import { BadRequestException, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 
-import { Plant } from "src/entities/plant.entity";
-import { FormTemplate } from "src/entities/forms/form-template.entity";
-import { FormField } from "src/entities/forms/form-field.entity";
-import { randomUUID } from "node:crypto";
+import { Plant } from 'src/entities/plant.entity';
+import { FormTemplate } from 'src/entities/forms/form-template.entity';
+import { FormField } from 'src/entities/forms/form-field.entity';
+import { randomUUID } from 'node:crypto';
 
 @Injectable()
 export class FormTemplatesService {
@@ -31,34 +31,83 @@ export class FormTemplatesService {
     }>;
   }) {
     if (input.plantIds.length > 0) {
-      const count = await this.plants.count({ where: { id: In(input.plantIds) } });
+      const count = await this.plants.count({
+        where: { id: In(input.plantIds) },
+      });
       if (count !== input.plantIds.length) {
-        throw new BadRequestException("Invalid plantIds");
+        throw new BadRequestException('Invalid plantIds');
       }
     }
 
     const templateId = randomUUID();
 
-const template = this.templates.create({
-  id: templateId,
-  familyId: templateId,
-  title: input.title,
-  plantIds: input.plantIds,
-  createdByUserId: input.createdByUserId,
-  status: "DRAFT",
-  version: 1,
-});
+    //import karne baad k liye validation (for Excel JSON too)
+    const title = (input.title ?? '').trim();
+    if (!title) throw new BadRequestException('Title is required');
 
-const savedTemplate = await this.templates.save(template);
+    if (!Array.isArray(input.fields) || input.fields.length === 0) {
+      throw new BadRequestException('At least one field is required');
+    }
 
+    const allowedTypes = new Set([
+      'TEXT',
+      'NUMBER',
+      'CHECKBOX',
+      'DROPDOWN',
+      'DATE',
+      'PHOTO',
+    ]);
+    const seenLabels = new Set<string>();
 
+    input.fields.forEach((f, idx) => {
+      const label = (f.label ?? '').trim();
+      if (!label)
+        throw new BadRequestException(`Field #${idx + 1}: label is required`);
 
+      const labelKey = label.toLowerCase();
+      if (seenLabels.has(labelKey)) {
+        throw new BadRequestException(`Duplicate field label: ${label}`);
+      }
+      seenLabels.add(labelKey);
+
+      const type = String(f.type ?? '').toUpperCase();
+      if (!allowedTypes.has(type)) {
+        throw new BadRequestException(`Invalid field type: ${f.type}`);
+      }
+
+      // type-specific: DROPDOWN requires options
+      if (type === 'DROPDOWN') {
+        const cfg: any = f.config ?? null;
+        const options = cfg?.options;
+        if (
+          !Array.isArray(options) ||
+          options.length === 0 ||
+          options.some((o: any) => !String(o).trim())
+        ) {
+          throw new BadRequestException(
+            `Field "${label}": DROPDOWN requires config.options (non-empty string array)`,
+          );
+        }
+      }
+    });
+
+    const template = this.templates.create({
+      id: templateId,
+      familyId: templateId,
+      title,
+      plantIds: input.plantIds,
+      createdByUserId: input.createdByUserId,
+      status: 'DRAFT',
+      version: 1,
+    });
+
+    const savedTemplate = await this.templates.save(template);
 
     const fieldEntities = input.fields.map((f, idx) =>
       this.fields.create({
         templateId: savedTemplate.id,
-        label: f.label,
-        type: f.type as any,
+        label: f.label.trim(),
+        type: String(f.type).toUpperCase() as any,
         required: f.required,
         order: idx + 1,
         config: f.config ?? null,
@@ -75,7 +124,7 @@ const savedTemplate = await this.templates.save(template);
 
   async list(input?: {
     q?: string;
-    status?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+    status?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
     page?: number;
     limit?: number;
   }) {
@@ -83,16 +132,17 @@ const savedTemplate = await this.templates.save(template);
     const limit = input?.limit ?? 20;
 
     const qb = this.templates
-      .createQueryBuilder("t")
-      .leftJoinAndSelect("t.fields", "f")
-      .orderBy("t.createdAt", "DESC")
-      .addOrderBy("f.order", "ASC");
+      .createQueryBuilder('t')
+      .leftJoinAndSelect('t.fields', 'f')
+      .orderBy('t.createdAt', 'DESC')
+      .addOrderBy('f.order', 'ASC');
 
-    if (input?.status) qb.andWhere("t.status = :status", { status: input.status });
+    if (input?.status)
+      qb.andWhere('t.status = :status', { status: input.status });
 
     if (input?.q && input.q.trim().length > 0) {
       const term = `%${input.q.trim().toLowerCase()}%`;
-      qb.andWhere("LOWER(t.title) LIKE :term", { term });
+      qb.andWhere('LOWER(t.title) LIKE :term', { term });
     }
 
     const [items, total] = await qb
@@ -108,27 +158,27 @@ const savedTemplate = await this.templates.save(template);
       where: { id },
       relations: { fields: true },
     });
-    if (!t) throw new BadRequestException("Form not found");
+    if (!t) throw new BadRequestException('Form not found');
     return t;
   }
 
   async publish(id: string) {
     const t = await this.templates.findOne({ where: { id } });
-    if (!t) throw new BadRequestException("Form not found");
+    if (!t) throw new BadRequestException('Form not found');
 
-    if (t.status !== "DRAFT") return t;
+    if (t.status !== 'DRAFT') return t;
 
-    t.status = "PUBLISHED";
+    t.status = 'PUBLISHED';
     return this.templates.save(t);
   }
 
   async archiveTemplate(id: string) {
     const t = await this.templates.findOne({ where: { id } });
-    if (!t) throw new BadRequestException("Form not found");
+    if (!t) throw new BadRequestException('Form not found');
 
-    if (t.status === "ARCHIVED") return t;
+    if (t.status === 'ARCHIVED') return t;
 
-    t.status = "ARCHIVED";
+    t.status = 'ARCHIVED';
     return this.templates.save(t);
   }
 
@@ -148,23 +198,25 @@ const savedTemplate = await this.templates.save(template);
       const fieldsRepo = tx.getRepository(FormField);
 
       const t = await templatesRepo.findOne({ where: { id: input.id } });
-      if (!t) throw new BadRequestException("Form not found");
+      if (!t) throw new BadRequestException('Form not found');
 
-      if (t.status !== "DRAFT") {
-        throw new BadRequestException("Only DRAFT forms can be edited");
+      if (t.status !== 'DRAFT') {
+        throw new BadRequestException('Only DRAFT forms can be edited');
       }
 
       if (input.plantIds) {
-        const count = await this.plants.count({ where: { id: In(input.plantIds) } });
+        const count = await this.plants.count({
+          where: { id: In(input.plantIds) },
+        });
         if (count !== input.plantIds.length) {
-          throw new BadRequestException("Invalid plantIds");
+          throw new BadRequestException('Invalid plantIds');
         }
       }
 
       await templatesRepo.update(
         { id: t.id },
         {
-          title: typeof input.title === "string" ? input.title : t.title,
+          title: typeof input.title === 'string' ? input.title : t.title,
           plantIds: input.plantIds ?? t.plantIds,
         },
       );
@@ -198,7 +250,7 @@ const savedTemplate = await this.templates.save(template);
       where: { id },
       relations: { fields: true },
     });
-    if (!t) throw new BadRequestException("Form not found");
+    if (!t) throw new BadRequestException('Form not found');
 
     return this.dataSource.transaction(async (tx) => {
       const templateRepo = tx.getRepository(FormTemplate);
@@ -207,9 +259,9 @@ const savedTemplate = await this.templates.save(template);
       const familyId = t.familyId ?? t.id;
 
       const row = await templateRepo
-        .createQueryBuilder("tt")
-        .select("MAX(tt.version)", "max")
-        .where("tt.familyId = :familyId", { familyId })
+        .createQueryBuilder('tt')
+        .select('MAX(tt.version)', 'max')
+        .where('tt.familyId = :familyId', { familyId })
         .getRawOne<{ max: string | null }>();
 
       const nextVersion = (row?.max ? Number(row.max) : (t.version ?? 1)) + 1;
@@ -218,7 +270,7 @@ const savedTemplate = await this.templates.save(template);
         title: t.title,
         plantIds: t.plantIds ?? [],
         createdByUserId: t.createdByUserId,
-        status: "DRAFT",
+        status: 'DRAFT',
         familyId,
         version: nextVersion,
       });
@@ -249,14 +301,14 @@ const savedTemplate = await this.templates.save(template);
 
   async listPublishedForPlant(plantId: string) {
     const all = await this.templates
-      .createQueryBuilder("t")
-      .leftJoinAndSelect("t.fields", "f")
-      .where("t.status = :status", { status: "PUBLISHED" })
+      .createQueryBuilder('t')
+      .leftJoinAndSelect('t.fields', 'f')
+      .where('t.status = :status', { status: 'PUBLISHED' })
       .andWhere(
         '(cardinality(t."plantIds") = 0 OR t."plantIds" @> ARRAY[:plantId]::text[])',
         { plantId },
       )
-      .addOrderBy("f.order", "ASC")
+      .addOrderBy('f.order', 'ASC')
       .getMany();
 
     const latestByFamily = new Map<string, (typeof all)[number]>();
@@ -269,6 +321,8 @@ const savedTemplate = await this.templates.save(template);
       }
     }
 
-    return Array.from(latestByFamily.values()).sort((a, b) => b.version - a.version);
+    return Array.from(latestByFamily.values()).sort(
+      (a, b) => b.version - a.version,
+    );
   }
 }

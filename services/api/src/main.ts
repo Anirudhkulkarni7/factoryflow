@@ -34,6 +34,5 @@ SwaggerModule.setup("docs", app, document);
       path: l.route.path,
       methods: Object.keys(l.route.methods),
     }));
-  console.log("ROUTES:", routes);
 }
 bootstrap();
