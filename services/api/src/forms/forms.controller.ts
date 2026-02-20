@@ -20,7 +20,7 @@ import { CreateFormDto } from './dto/create-form.dto';
 import { FormsService } from './forms.service';
 import { UpdateFormDto } from "./dto/update-form.dto";
 import { ListFormsQueryDto } from "./dto/list-forms.query";
-
+import { ImportFormDto } from "./dto/import-form.dto";
 
 
 @Controller('forms')
@@ -79,5 +79,15 @@ archive(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     return this.forms.cloneTemplate(id);
   }
 
+
+  @Post("import")
+importFromJson(@CurrentUser() me: JwtPayload, @Body() dto: ImportFormDto) {
+  return this.forms.importFromJson({
+    title: dto.title,
+    plantIds: dto.plantIds ?? [],
+    createdByUserId: me.sub,
+    fields: dto.fields,
+  });
+}
   
 }

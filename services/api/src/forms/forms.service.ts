@@ -19,6 +19,9 @@ export class FormsService {
   list(input?: Parameters<FormTemplatesService["list"]>[0]) {
     return this.templatesService.list(input);
   }
+  importFromJson(input: Parameters<FormTemplatesService["create"]>[0]) {
+  return this.templatesService.create(input);
+}
 
   publish(id: string) {
     return this.templatesService.publish(id);
@@ -67,4 +70,5 @@ export class FormsService {
   rejectSubmission(input: Parameters<SubmissionReviewService["rejectSubmission"]>[0]) {
     return this.reviewService.rejectSubmission(input);
   }
+  
 }
