@@ -5,7 +5,7 @@ import { DataSource, In, Repository } from "typeorm";
 import { Plant } from "src/entities/plant.entity";
 import { FormTemplate } from "src/entities/forms/form-template.entity";
 import { FormField } from "src/entities/forms/form-field.entity";
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 
 @Injectable()
 export class FormTemplatesService {

@@ -417,3 +417,37 @@ That will immediately shrink the file and make it readable.
 ---
 
 If you want, paste your current `FormsModule` + current constructor injection list and I’ll give you the exact updated `FormsModule` + new service class skeletons (copy-paste ready) so you can refactor in one clean sweep.
+
+
+******************************************************************************************************************************************************************
+
+
+19/2
+
+Done, have to do ,side points :
+
+
+Here’s what’s **still left in backend**, grouped by priority.
+
+## Must-have next (core product readiness)
+
+* **Submission “details” response upgrade**: return answers with **field label + type + required** (not only `fieldId/value`) so admin UI can render a submission without extra lookups.
+* **Admin-friendly “latest per family” listing** (optional endpoint): mobile already picks latest; admin list should also easily show the latest version per family if you want a clean UI.
+* **Plants CRUD** (at least list + create/update + disable/archive) if your admin panel will manage plants from UI (right now you mainly have list).
+* **Users CRUD completeness** (you’re close): list/search , update , disable , but ensure role/plant update rules are correct (e.g., manager must have plantIds, user must have exactly one plant, etc.) — simple validation rules.
+
+## Nice-to-have soon (makes dashboard/UI much better)
+
+* **Template-wise analytics**: “most submitted forms”, counts per template/version.
+* **Approval time metrics**: avg/median time from submitted → reviewed.
+* **Reviewer stats**: approvals/rejections per manager/admin.
+* **Consistent range filters** across dashboard endpoints (you already started).
+
+## Can be done later (hardening / production)
+
+* File hardening: image-only MIME checks, max size, delete endpoint, verify PHOTO key exists on submit.
+* Replace `synchronize: true` with **migrations**.
+* Global exception filter + consistent error response shape.
+* Logging + request tracing.
+
+If you go MVP-first, the **single best next backend item** is: **“Get submission by id with expanded answer metadata”** — it unblocks admin UI immediately.
