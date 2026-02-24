@@ -28,19 +28,23 @@ async function main() {
   const existing = await repo.findOne({ where: { email } });
 
   if (existing) {
-    console.log("Admin already exists:", email);
-  } else {
-    const admin = repo.create({
-      name: "FactoryFlow Admin",
-      email,
-      password: passwordHash,
-      role: "ADMIN",
-      plantIds: [],
-    });
+  existing.password = passwordHash;
+  existing.role = "ADMIN";
+  existing.plantIds = existing.plantIds ?? [];
+  await repo.save(existing);
+  console.log("Admin password RESET:", email, "password:", plainPassword);
+} else {
+  const admin = repo.create({
+    name: "FactoryFlow Admin",
+    email,
+    password: passwordHash,
+    role: "ADMIN",
+    plantIds: [],
+  });
 
-    await repo.save(admin);
-    console.log("Admin created:", email, "password:", plainPassword);
-  }
+  await repo.save(admin);
+  console.log("Admin created:", email, "password:", plainPassword);
+}
 
   await ds.destroy();
 }

@@ -228,6 +228,94 @@ export class FormSubmissionsService {
     return { items, page, limit, total };
   }
 
+  private async enrichSubmissions(rows: FormSubmission[]) {
+    if (!rows.length) return [];
+
+    // unique templateId + templateVersion pairs
+    const pairs = Array.from(
+      new Map(
+        rows.map((s) => [`${s.templateId}:${s.templateVersion}`, s]),
+      ).values(),
+    );
+
+    const templateIds = Array.from(new Set(rows.map((s) => s.templateId)));
+
+    const templates = pairs.length
+      ? await this.templates
+          .createQueryBuilder('t')
+          .where(
+            pairs
+              .map((_, i) => `(t.id = :id${i} AND t.version = :v${i})`)
+              .join(' OR '),
+            Object.fromEntries(
+              pairs.flatMap((s, i) => [
+                [`id${i}`, s.templateId],
+                [`v${i}`, s.templateVersion],
+              ]),
+            ),
+          )
+          .getMany()
+      : [];
+
+    const templateByKey = new Map(
+      templates.map((t) => [
+        `${t.id}:${t.version}`,
+        { id: t.id, title: t.title, version: t.version, familyId: t.familyId },
+      ]),
+    );
+
+    const fields = templateIds.length
+      ? await this.fields.find({
+          where: { templateId: In(templateIds) },
+          order: { order: 'ASC' },
+        })
+      : [];
+
+    const fieldById = new Map(
+      fields.map((f) => [
+        f.id,
+        {
+          id: f.id,
+          label: f.label,
+          type: f.type,
+          required: f.required,
+          order: f.order,
+          config: f.config ?? null,
+        },
+      ]),
+    );
+
+    return rows.map((s) => {
+      const answers = (s.answers ?? []).map((a) => ({
+        id: a.id,
+        fieldId: a.fieldId,
+        value: a.value,
+        field: fieldById.get(a.fieldId) ?? null,
+      }));
+
+      // optional: keep answers in field order (nice for UI)
+      answers.sort((x, y) => (x.field?.order ?? 0) - (y.field?.order ?? 0));
+
+      return {
+        id: s.id,
+        templateId: s.templateId,
+        templateVersion: s.templateVersion,
+        plantId: s.plantId,
+        submittedByUserId: s.submittedByUserId,
+        status: s.status,
+        rejectReason: s.rejectReason,
+        submittedAt: s.submittedAt,
+        reviewedAt: s.reviewedAt ?? null,
+        reviewedByUserId: s.reviewedByUserId ?? null,
+
+        template:
+          templateByKey.get(`${s.templateId}:${s.templateVersion}`) ?? null,
+
+        answers,
+      };
+    });
+  }
+
   async listMySubmissions(input: {
     userId: string;
     status?: 'SUBMITTED' | 'APPROVED' | 'REJECTED';
@@ -241,7 +329,8 @@ export class FormSubmissionsService {
     if (input.status)
       qb.andWhere('s.status = :status', { status: input.status });
 
-    return qb.getMany();
+    const rows = await qb.getMany();
+    return this.enrichSubmissions(rows);
   }
 
   async getSubmissionById(input: {

@@ -19,6 +19,102 @@ export class FormTemplatesService {
     private readonly dataSource: DataSource,
   ) {}
 
+  private normalizeAndValidateCreateInput(input: {
+    title: string;
+    fields: Array<{
+      label: string;
+      type: string;
+      required: boolean;
+      config?: Record<string, unknown>;
+    }>;
+  }) {
+    const title = (input.title ?? '').trim();
+    if (!title) throw new BadRequestException('Title is required');
+
+    if (!Array.isArray(input.fields) || input.fields.length === 0) {
+      throw new BadRequestException('At least one field is required');
+    }
+
+    if (input.fields.length > FormTemplatesService.MAX_FIELDS) {
+      throw new BadRequestException(
+        `Too many fields. Max ${FormTemplatesService.MAX_FIELDS}`,
+      );
+    }
+
+    const seenLabels = new Set<string>();
+
+    const fields = input.fields.map((f, idx) => {
+      const label = (f.label ?? '').trim();
+      if (!label) {
+        throw new BadRequestException(`Field #${idx + 1}: label is required`);
+      }
+
+      const labelKey = label.toLowerCase();
+      if (seenLabels.has(labelKey)) {
+        throw new BadRequestException(`Duplicate field label: ${label}`);
+      }
+      seenLabels.add(labelKey);
+
+      const type = String(f.type ?? '').toUpperCase();
+      if (!FormTemplatesService.ALLOWED_TYPES.has(type)) {
+        throw new BadRequestException(`Invalid field type: ${f.type}`);
+      }
+
+      const required = !!f.required;
+      const cfg: any = f.config ?? null;
+
+      if (type === 'DROPDOWN') {
+        const raw = cfg?.options;
+        if (!Array.isArray(raw) || raw.length === 0) {
+          throw new BadRequestException(
+            `Field "${label}": DROPDOWN requires config.options (non-empty string array)`,
+          );
+        }
+
+        const trimmed = raw
+          .map((o: any) => String(o ?? '').trim())
+          .filter(Boolean);
+
+        if (trimmed.length === 0) {
+          throw new BadRequestException(
+            `Field "${label}": options cannot be empty`,
+          );
+        }
+
+        const unique = new Map<string, string>();
+        for (const opt of trimmed) {
+          const k = opt.toLowerCase();
+          if (!unique.has(k)) unique.set(k, opt);
+        }
+        const options = Array.from(unique.values());
+
+        if (options.length > FormTemplatesService.MAX_DROPDOWN_OPTIONS) {
+          throw new BadRequestException(
+            `Field "${label}": too many options. Max ${FormTemplatesService.MAX_DROPDOWN_OPTIONS}`,
+          );
+        }
+
+        return { label, type, required, config: { options } };
+      }
+
+      return { label, type, required, config: f.config ?? null };
+    });
+
+    return { title, fields };
+  }
+
+  private static readonly ALLOWED_TYPES = new Set([
+    'TEXT',
+    'NUMBER',
+    'CHECKBOX',
+    'DROPDOWN',
+    'DATE',
+    'PHOTO',
+  ]);
+
+  private static readonly MAX_FIELDS = 100;
+  private static readonly MAX_DROPDOWN_OPTIONS = 50;
+
   async create(input: {
     title: string;
     plantIds: string[];
@@ -39,57 +135,9 @@ export class FormTemplatesService {
       }
     }
 
+    const { title, fields } = this.normalizeAndValidateCreateInput(input);
+
     const templateId = randomUUID();
-
-    //import karne baad k liye validation (for Excel JSON too)
-    const title = (input.title ?? '').trim();
-    if (!title) throw new BadRequestException('Title is required');
-
-    if (!Array.isArray(input.fields) || input.fields.length === 0) {
-      throw new BadRequestException('At least one field is required');
-    }
-
-    const allowedTypes = new Set([
-      'TEXT',
-      'NUMBER',
-      'CHECKBOX',
-      'DROPDOWN',
-      'DATE',
-      'PHOTO',
-    ]);
-    const seenLabels = new Set<string>();
-
-    input.fields.forEach((f, idx) => {
-      const label = (f.label ?? '').trim();
-      if (!label)
-        throw new BadRequestException(`Field #${idx + 1}: label is required`);
-
-      const labelKey = label.toLowerCase();
-      if (seenLabels.has(labelKey)) {
-        throw new BadRequestException(`Duplicate field label: ${label}`);
-      }
-      seenLabels.add(labelKey);
-
-      const type = String(f.type ?? '').toUpperCase();
-      if (!allowedTypes.has(type)) {
-        throw new BadRequestException(`Invalid field type: ${f.type}`);
-      }
-
-      // type-specific: DROPDOWN requires options
-      if (type === 'DROPDOWN') {
-        const cfg: any = f.config ?? null;
-        const options = cfg?.options;
-        if (
-          !Array.isArray(options) ||
-          options.length === 0 ||
-          options.some((o: any) => !String(o).trim())
-        ) {
-          throw new BadRequestException(
-            `Field "${label}": DROPDOWN requires config.options (non-empty string array)`,
-          );
-        }
-      }
-    });
 
     const template = this.templates.create({
       id: templateId,
@@ -103,11 +151,11 @@ export class FormTemplatesService {
 
     const savedTemplate = await this.templates.save(template);
 
-    const fieldEntities = input.fields.map((f, idx) =>
+    const fieldEntities = fields.map((f, idx) =>
       this.fields.create({
         templateId: savedTemplate.id,
-        label: f.label.trim(),
-        type: String(f.type).toUpperCase() as any,
+        label: f.label,
+        type: f.type as any,
         required: f.required,
         order: idx + 1,
         config: f.config ?? null,
