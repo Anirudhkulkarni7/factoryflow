@@ -457,47 +457,20 @@ If you go MVP-first, the **single best next backend item** is: **“Get submissi
 ****************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
 
 24/02
+Before you start the frontend, these backend pieces are still left (in priority order):
 
-## ✅ What we did (so far)
+1. **File upload hardening (MinIO)**
+   PHOTO fields should accept **images only**, allow only **whitelisted folders (photos)**, enforce **max size**, and return **clean consistent errors**. (Optional: verify the referenced fileKey exists when submitting.)
 
-* Fixed **familyId NOT NULL** issue by setting `id` + `familyId` using `randomUUID()` during template create
-* Implemented **/forms/import** (Option A: frontend converts Excel → JSON, backend creates **DRAFT**)
-* Verified full flow: **import → draft → publish → mobile list → submit** (works)
-* Added **backend validations for import/create**:
+2. **Template lifecycle guardrails**
+   Enforce strict rules: **can’t publish with 0 fields**, only **DRAFT can be edited/published**, define clear archive rules.
 
-  * title required
-  * fields required
-  * allowed types only
-  * duplicate labels blocked
-  * DROPDOWN requires `config.options`
-* Refactored validations to be **scalable**:
+3. **Sanity test pass on mobile endpoints**
+   Confirm the full “mobile contract” is consistent: list/detail/mine all return the expected enriched shapes (you already implemented `/mine`, just test it with admin or after seeding a USER).
 
-  * moved into `normalizeAndValidateCreateInput()`
-  * added limits (max fields / max dropdown options)
-  * dropdown options cleaned (trim + unique)
-* Fixed testing blockers:
+4. Optional (but very useful for smooth dev):
 
-  * solved PowerShell JSON/login issues (use `Invoke-RestMethod`)
-  * created Plant via API when plants list was empty
+   * **`/health` endpoint**
+   * **seed/reset script** so every dev machine always has admin + plant + demo published forms.
 
----
-
-## 🔥 What is left (before frontend)
-
-* Make **`/mobile/forms/submissions/mine`** return the same enriched response as list/detail (template + field metadata)
-* File upload hardening (MinIO):
-
-  * allow only image MIME types for PHOTO
-  * folder whitelist (photos)
-  * consistent max size + clean errors
-  * optional: verify file key exists on submit
-* Template lifecycle guardrails:
-
-  * prevent publish if 0 fields
-  * ensure transitions are strict (DRAFT only edit/publish, archived rules)
-* Optional ops polish:
-
-  * `/health` endpoint
-  * better seed/reset script (admin + plant + demo forms always available)
-
-
+If you do (1) and (2), frontend work becomes dramatically smoother and you avoid nasty rework later.

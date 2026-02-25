@@ -17,12 +17,17 @@ async function bootstrap() {
   .setTitle("FactoryFlow API")
   .setDescription("Backend APIs for FactoryFlow")
   .setVersion("1.0")
-  .addBearerAuth()
+  .addBearerAuth(
+    { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+    "bearer"
+  )
   .build();
 
 const document = SwaggerModule.createDocument(app, config);
-SwaggerModule.setup("docs", app, document);
 
+document.security = [{ bearer: [] }];
+
+SwaggerModule.setup("docs", app, document);
 
   await app.listen(3000);
 

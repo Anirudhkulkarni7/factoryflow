@@ -1,8 +1,48 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { PutObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
+
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_FOLDERS = new Set(["photos"] as const);
+const ALLOWED_PHOTO_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+type AllowedFolder = "photos";
+
+function normalizeFolder(folder?: string): AllowedFolder {
+  const f = (folder ?? "photos").trim().toLowerCase();
+  if (!ALLOWED_FOLDERS.has(f as AllowedFolder)) {
+    throw new BadRequestException(`Invalid folder: ${folder ?? ""}`);
+  }
+  return f as AllowedFolder;
+}
+
+function assertAllowedUpload(folder: AllowedFolder, mimeType: string) {
+  if (folder === "photos" && !ALLOWED_PHOTO_MIME_TYPES.has(mimeType)) {
+    throw new BadRequestException("Invalid file type for photos");
+  }
+}
+
+function assertSafeKey(key: string, folder: AllowedFolder = "photos") {
+  const k = (key ?? "").trim();
+  if (!k) throw new BadRequestException("Invalid key");
+  if (!k.startsWith(`${folder}/`)) throw new BadRequestException("Invalid key prefix");
+  if (k.includes("..") || k.includes("\\") || k.startsWith("/")) {
+    throw new BadRequestException("Invalid key");
+  }
+  return k;
+}
+
+function clampExpiresIn(expiresInSeconds?: number) {
+  const exp = Number(expiresInSeconds ?? 300);
+  if (!Number.isFinite(exp)) return 300;
+  return Math.max(30, Math.min(exp, 3600));
+}
 
 @Injectable()
 export class FilesService {
@@ -14,7 +54,8 @@ export class FilesService {
     const port = Number(this.config.get<string>("MINIO_PORT") ?? "9000");
     const accessKeyId = this.config.get<string>("MINIO_ACCESS_KEY") ?? "";
     const secretAccessKey = this.config.get<string>("MINIO_SECRET_KEY") ?? "";
-    const useSsl = (this.config.get<string>("MINIO_USE_SSL") ?? "false") === "true";
+    const useSsl =
+      (this.config.get<string>("MINIO_USE_SSL") ?? "false") === "true";
 
     this.bucket = this.config.get<string>("MINIO_BUCKET") ?? "factoryflow";
 
@@ -26,7 +67,7 @@ export class FilesService {
       region: "us-east-1",
       endpoint: `${useSsl ? "https" : "http"}://${endpoint}:${port}`,
       credentials: { accessKeyId, secretAccessKey },
-      forcePathStyle: true, // IMPORTANT for MinIO
+      forcePathStyle: true, // MinIO needs path-style
     });
   }
 
@@ -34,17 +75,22 @@ export class FilesService {
     return name.replace(/[^a-zA-Z0-9._-]/g, "_");
   }
 
-  async upload(file: { buffer: Buffer; originalName: string; mimeType: string; size: number }, folder = "photos") {
-    if (!file?.buffer?.length) throw new BadRequestException("Empty file");
+  async upload(
+    file: { buffer: Buffer; originalName: string; mimeType: string; size: number },
+    folder: AllowedFolder = "photos",
+  ) {
+    if (!file?.buffer?.length) throw new BadRequestException("Empty file"); // validate file
 
-    const MAX_MB = 10;
-    if (file.size > MAX_MB * 1024 * 1024) {
-      throw new BadRequestException(`File too large. Max ${MAX_MB}MB`);
+    const safeFolder = normalizeFolder(folder); // whitelist folder
+    assertAllowedUpload(safeFolder, file.mimeType); // enforce mime policy
+
+    if ((file.size ?? 0) > MAX_FILE_SIZE_BYTES) {
+      throw new BadRequestException("File too large"); // consistent size error
     }
 
     const safeName = this.sanitizeFilename(file.originalName || "file");
     const day = new Date().toISOString().slice(0, 10);
-    const key = `${folder}/${day}/${randomUUID()}_${safeName}`;
+    const key = `${safeFolder}/${day}/${randomUUID()}_${safeName}`;
 
     await this.s3.send(
       new PutObjectCommand({
@@ -59,12 +105,12 @@ export class FilesService {
   }
 
   async getSignedGetUrl(key: string, expiresInSeconds = 300) {
-    const cleanKey = (key ?? "").trim();
-    if (!cleanKey) throw new BadRequestException("Invalid key");
+    const cleanKey = assertSafeKey(key, "photos");
+    const safeExp = clampExpiresIn(expiresInSeconds); // clamp expiry
 
     const cmd = new GetObjectCommand({ Bucket: this.bucket, Key: cleanKey });
-    const url = await getSignedUrl(this.s3, cmd, { expiresIn: expiresInSeconds });
+    const url = await getSignedUrl(this.s3, cmd, { expiresIn: safeExp });
 
-    return { key: cleanKey, expiresInSeconds, url };
+    return { key: cleanKey, expiresInSeconds: safeExp, url };
   }
 }
