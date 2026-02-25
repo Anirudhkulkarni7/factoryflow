@@ -4,8 +4,8 @@ import { FormField } from "src/entities/forms/form-field.entity";
 @Injectable()
 export class AnswerValidationService {
   validate(field: FormField, value: unknown) {
-    if (value === undefined) return; //ise hi rakhahe 
-    if (value === null) return; // not reuiqred fields k liye null rakhahe 
+    if (value === undefined) return;
+    if (value === null) return;
 
     switch (field.type) {
       case "TEXT": {
@@ -44,7 +44,28 @@ export class AnswerValidationService {
         if (typeof value !== "string") {
           throw new BadRequestException(`${field.label} must be a string option`);
         }
-        // later: validate allowed options via field.config.options
+
+        const cfg = field.config as any;
+        const optionsRaw = cfg?.options;
+
+        if (!Array.isArray(optionsRaw) || optionsRaw.length === 0) {
+          throw new BadRequestException(`${field.label} has no options configured`);
+        }
+
+        const options = optionsRaw
+          .map((o: any) => String(o ?? "").trim())
+          .filter(Boolean);
+
+        if (options.length === 0) {
+          throw new BadRequestException(`${field.label} has invalid options configured`);
+        }
+
+        const incoming = value.trim();
+        const ok = options.some((opt) => opt.toLowerCase() === incoming.toLowerCase());
+        if (!ok) {
+          throw new BadRequestException(`${field.label} must be one of the allowed options`);
+        }
+
         return;
       }
 
@@ -52,7 +73,19 @@ export class AnswerValidationService {
         if (typeof value !== "string") {
           throw new BadRequestException(`${field.label} must be a file key string`);
         }
-        // later: validate it looks like a MinIO object key
+
+        const key = value.trim();
+        if (!key) throw new BadRequestException(`${field.label} must be a valid file key`);
+        if (!key.startsWith("photos/")) {
+          throw new BadRequestException(`${field.label} must be a photos/ key`);
+        }
+        if (key.includes("..") || key.includes("\\") || key.startsWith("/")) {
+          throw new BadRequestException(`${field.label} has an invalid file key`);
+        }
+        if (key.length > 512) {
+          throw new BadRequestException(`${field.label} file key is too long`);
+        }
+
         return;
       }
 

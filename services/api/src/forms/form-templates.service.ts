@@ -211,20 +211,36 @@ export class FormTemplatesService {
   }
 
   async publish(id: string) {
-    const t = await this.templates.findOne({ where: { id } });
-    if (!t) throw new BadRequestException('Form not found');
+    return this.dataSource.transaction(async (tx) => {
+      const templatesRepo = tx.getRepository(FormTemplate);
+      const fieldsRepo = tx.getRepository(FormField);
 
-    if (t.status !== 'DRAFT') return t;
+      const t = await templatesRepo.findOne({ where: { id } });
+      if (!t) throw new BadRequestException('Form not found');
 
-    t.status = 'PUBLISHED';
-    return this.templates.save(t);
+      if (t.status !== 'DRAFT') {
+        throw new BadRequestException('Only DRAFT forms can be published');
+      }
+
+      const fieldCount = await fieldsRepo.count({
+        where: { templateId: t.id },
+      });
+      if (fieldCount === 0) {
+        throw new BadRequestException('Cannot publish a form with 0 fields');
+      }
+
+      t.status = 'PUBLISHED';
+      return templatesRepo.save(t);
+    });
   }
 
   async archiveTemplate(id: string) {
     const t = await this.templates.findOne({ where: { id } });
     if (!t) throw new BadRequestException('Form not found');
 
-    if (t.status === 'ARCHIVED') return t;
+    if (t.status !== 'PUBLISHED') {
+      throw new BadRequestException('Only PUBLISHED forms can be archived');
+    }
 
     t.status = 'ARCHIVED';
     return this.templates.save(t);
@@ -270,9 +286,14 @@ export class FormTemplatesService {
       );
 
       if (input.fields) {
+        const normalized = this.normalizeAndValidateCreateInput({
+          title: typeof input.title === 'string' ? input.title : t.title,
+          fields: input.fields,
+        });
+
         await fieldsRepo.delete({ templateId: t.id });
 
-        const newFields = input.fields.map((f, idx) =>
+        const newFields = normalized.fields.map((f, idx) =>
           fieldsRepo.create({
             templateId: t.id,
             label: f.label,

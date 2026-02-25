@@ -1,0 +1,669 @@
+Got it. I’ll explain the **full app flow** (who does what, in what order), and then I’ll walk through **every API group you showed in Swagger**, with **what it’s for + payload shape + when it’s called**. I’ll stick to what’s visible in your Swagger screenshots + the code you shared (and I’ll clearly label the few places where the exact response shape depends on Swagger).
+
+---
+
+## Big picture: what your system supports
+
+Your backend supports a full “forms lifecycle” with **3 roles**:
+
+* **ADMIN (web/admin app)**
+  Creates plants, creates managers/users, creates/imports form templates (DRAFT), edits them, publishes them, archives them, views all submissions, and sees dashboards.
+
+* **MANAGER (review app / admin app subset)**
+  Manages users for their plant(s), reviews submissions for assigned plants (approve/reject), and sees dashboard data for their plants.
+
+* **USER (mobile app)**
+  Chooses plant (from allowed plants), downloads published forms for that plant, fills form, uploads photos if needed, submits, and views “my submissions”.
+
+Everything is protected by **JWT** from `POST /auth/login`. The token contains:
+
+* `role`
+* `plantIds` (for non-admin)
+  and your APIs enforce access using those.
+
+---
+
+# End-to-end UX flow: what happens in the app
+
+### 1) Setup (Admin)
+
+1. Admin logs in → `POST /auth/login`
+2. Admin creates a plant (if needed) → `POST /plants`
+3. Admin creates managers (assign plants) → `POST /users/managers`
+4. Manager creates users for their plant → `POST /users/plants/{plantId}/users`
+5. Admin creates a form template as DRAFT:
+
+   * Either manual create → `POST /forms`
+   * Or Excel import JSON → `POST /forms/import`
+6. Admin edits while DRAFT → `PATCH /forms/{id}`
+7. Admin publishes → `POST /forms/{id}/publish`
+8. (Optional) Admin clones template to make a new DRAFT version → `POST /forms/{id}/clone`
+9. (Optional) Admin archives old published templates → `POST /forms/{id}/archive`
+
+### 2) Mobile usage (User)
+
+1. User logs in → `POST /auth/login` (gets JWT with plantIds)
+2. User selects a plant → client calls `GET /mobile/forms?plantId=...`
+3. User opens a published form (template + fields are returned from mobile forms list)
+4. If a PHOTO field is present:
+
+   * upload photo → `POST /files/upload?folder=photos`
+   * store returned `key` in the answer value for that PHOTO field
+5. Submit filled form → `POST /mobile/forms/submissions`
+6. User checks their past submissions → `GET /mobile/forms/submissions/mine`
+7. To view a photo later → `GET /files/signed-url?key=photos/...`
+
+### 3) Review flow (Manager/Admin)
+
+1. Reviewer loads submission list → `GET /mobile/forms/submissions`
+2. Reviewer opens submission detail → `GET /mobile/forms/submissions/{id}`
+3. Reviewer approves → `POST /mobile/forms/submissions/{id}/approve`
+4. or rejects (with reason) → `POST /mobile/forms/submissions/{id}/reject`
+
+### 4) Dashboard (Admin/Manager)
+
+Admin/manager dashboards call:
+
+* `GET /dashboard/summary`
+* `GET /dashboard/recent-submissions`
+* `GET /dashboard/plant-summary`
+* `GET /dashboard/template-summary`
+* `GET /dashboard/trends`
+* `GET /dashboard/pending-aging`
+* `GET /dashboard/top-submitters`
+
+(Exact response schemas: check Swagger for each. The endpoint names indicate aggregation/analytics.)
+
+---
+
+# API documentation: every API in your Swagger
+
+## 0) App
+
+### GET `/`
+
+**Purpose:** basic root endpoint (usually “API running”).
+**Used by:** not required for core flows.
+
+---
+
+## 1) Auth
+
+### POST `/auth/login`
+
+**Purpose:** login and get JWT.
+**Used by:** Admin / Manager / User before calling any protected endpoints.
+
+**Request body**
+
+```json
+{
+  "email": "string",
+  "password": "string"
+}
+```
+
+**Response (from your AuthService code)**
+
+```json
+{
+  "accessToken": "JWT string",
+  "user": {
+    "id": "uuid",
+    "name": "string",
+    "email": "string",
+    "role": "ADMIN|MANAGER|USER",
+    "plantIds": ["uuid", "..."]
+  }
+}
+```
+
+**Notes**
+
+* Passwords stored as bcrypt hash.
+* JWT payload includes `sub`, `role`, `plantIds`.
+
+---
+
+## 2) Health
+
+### GET `/health`
+
+**Purpose:** quick check that API is alive + DB reachable + MinIO configured.
+**Used by:** dev/ops (docker/k8s health checks), local debugging.
+
+**Response**
+
+```json
+{ "ok": true, "db": "up", "minio": "ok" }
+```
+
+---
+
+## 3) Plants
+
+### GET `/plants`
+
+**Purpose:** list plants.
+**Used by:** Admin for management; Manager/User to see allowed plants (depending on your controller rules).
+
+**Response:** array of Plant records (id, name, timestamps).
+
+### POST `/plants`
+
+**Purpose:** create a new plant.
+**Used by:** Admin.
+
+**Request body**
+
+```json
+{ "name": "string" }
+```
+
+**Response:** created Plant record.
+
+---
+
+## 4) Users
+
+### POST `/users/managers`
+
+**Purpose:** create a MANAGER and assign plantIds.
+**Used by:** Admin.
+
+**Request body (based on UsersService.createManager)**
+
+```json
+{
+  "name": "string",
+  "email": "string",
+  "password": "string",
+  "plantIds": ["uuid", "..."]
+}
+```
+
+**Response:** “safe user” object (no password):
+
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "email": "string",
+  "role": "MANAGER",
+  "plantIds": ["uuid", "..."],
+  "active": true
+}
+```
+
+---
+
+### POST `/users/plants/{plantId}/users`
+
+**Purpose:** manager creates a USER for a specific plant.
+**Used by:** Manager (only if that plantId is assigned to them).
+
+**Path param**
+
+* `plantId`: uuid
+
+**Request body**
+
+```json
+{
+  "name": "string",
+  "email": "string",
+  "password": "string"
+}
+```
+
+**Response:** safe user object (role USER, plantIds = [plantId]).
+
+---
+
+### GET `/users`
+
+**Purpose:** list users with filters/pagination.
+**Used by:** Admin/Manager (user management UI).
+
+**Query params** (from UsersService.listUsers)
+
+* `q?` search by name/email
+* `role?` ADMIN|MANAGER|USER
+* `plantId?` filter users where plantId in plantIds
+* `active?` boolean
+* `page?` number
+* `limit?` number (capped to 100)
+
+**Response**
+
+```json
+{
+  "items": [safeUser...],
+  "page": 1,
+  "limit": 20,
+  "total": 123
+}
+```
+
+---
+
+### PATCH `/users/{id}`
+
+**Purpose:** update user profile fields (name/email/role/plantIds/active).
+**Used by:** Admin (and maybe Manager, depending on controller guard rules).
+
+**Body**
+
+```json
+{
+  "name?": "string",
+  "email?": "string",
+  "role?": "ADMIN|MANAGER|USER",
+  "plantIds?": ["uuid", "..."],
+  "active?": true
+}
+```
+
+**Response:** safe user.
+
+---
+
+### PATCH `/users/{id}/disable`
+
+### PATCH `/users/{id}/enable`
+
+**Purpose:** toggle `active` flag.
+**Used by:** Admin/Manager (depending on your controller guard rules).
+
+**No body** (typically), response is updated safe user.
+
+---
+
+## 5) Forms (templates)
+
+Your template model supports:
+
+* `status`: DRAFT | PUBLISHED | ARCHIVED
+* `familyId` + `version`
+* fields stored in `form_field` table tied to templateId
+
+### POST `/forms`
+
+**Purpose:** create a form template as **DRAFT** (manual create).
+**Used by:** Admin/Manager (depends on controller roles).
+
+**Request body** (same shape as create)
+
+```json
+{
+  "title": "string",
+  "plantIds": ["uuid", "..."], 
+  "fields": [
+    {
+      "label": "string",
+      "type": "TEXT|NUMBER|CHECKBOX|DROPDOWN|DATE|PHOTO",
+      "required": true,
+      "config?": { "options": ["..."] }   // only for DROPDOWN
+    }
+  ]
+}
+```
+
+**Response:** FormTemplate with fields.
+
+---
+
+### POST `/forms/import`
+
+**Purpose:** create a DRAFT template from JSON (frontend converts Excel→JSON).
+**Used by:** Admin UI “Import form” flow.
+
+**Request body:** same structure as create (title/plantIds/fields).
+**Response:** created DRAFT template with fields.
+
+---
+
+### GET `/forms`
+
+**Purpose:** list templates (with fields) with paging/search/status filter.
+**Used by:** Admin template list UI.
+
+**Query params** (from your service)
+
+* `q?`
+* `status?` DRAFT|PUBLISHED|ARCHIVED
+* `page?`
+* `limit?`
+
+**Response**
+
+```json
+{ "items": [templates...], "page": 1, "limit": 20, "total": 50 }
+```
+
+---
+
+### GET `/forms/{id}`
+
+**Purpose:** get one template with fields.
+**Used by:** Admin edit/view screen, clone screen.
+
+**Response:** template + fields.
+
+---
+
+### PATCH `/forms/{id}`
+
+**Purpose:** update template title/plantIds/fields.
+**Used by:** Admin while template is DRAFT.
+
+**Important rule:** only DRAFT can be edited.
+
+**Body** (any subset)
+
+```json
+{
+  "title?": "string",
+  "plantIds?": ["uuid"],
+  "fields?": [ ...same field array as create... ]
+}
+```
+
+---
+
+### POST `/forms/{id}/publish`
+
+**Purpose:** publish a DRAFT.
+**Used by:** Admin.
+
+**Rules (from the changes you made)**
+
+* Only DRAFT can publish
+* Must have at least 1 field (guardrail)
+  **No body**. Response: updated template.
+
+---
+
+### POST `/forms/{id}/archive`
+
+**Purpose:** archive a template.
+**Used by:** Admin.
+
+**Rules you made**
+
+* Only PUBLISHED can archive
+  **No body**. Response: updated template.
+
+---
+
+### POST `/forms/{id}/clone`
+
+**Purpose:** clone template into a new DRAFT version (same familyId, version increments).
+**Used by:** Admin when updating an already published form safely.
+
+**No body**. Response: new DRAFT template + cloned fields.
+
+---
+
+## 6) MobileForms (published forms + submissions)
+
+All endpoints are under `/mobile/forms` and use JWT role + plantIds checks.
+
+### GET `/mobile/forms`
+
+**Purpose:** list published templates available for a plant (latest version per familyId).
+**Used by:** Mobile app after user chooses plant.
+
+**Query**
+
+* `plantId` (uuid) required
+
+**Access rule (from your controller):**
+
+* if not ADMIN, plantId must be in `me.plantIds`
+
+**Response:** list of published templates + fields.
+
+---
+
+### POST `/mobile/forms/submissions`
+
+**Purpose:** submit a filled form.
+**Used by:** Mobile user when they press “Submit”.
+
+**Body** (from CreateSubmissionDto usage in controller/service)
+
+```json
+{
+  "templateId": "uuid",
+  "plantId": "uuid",
+  "answers": [
+    { "fieldId": "uuid", "value": "..." }
+  ]
+}
+```
+
+**Validation rules enforced in backend (from your code)**
+
+* template exists and is PUBLISHED
+* template is available to plantId (plantIds empty = global)
+* required fields must be present
+* each answer validated by field type:
+
+  * DROPDOWN must match options
+  * PHOTO must be `photos/...` key
+  * TEXT/NUMBER/CHECKBOX/DATE validated
+
+**Response:** saved submission (with answers).
+
+---
+
+### GET `/mobile/forms/submissions`
+
+**Purpose:** submissions list for review screens and admin.
+**Used by:** Manager/Admin review dashboard page.
+
+**Query params** (from ListSubmissionsQueryDto + your service)
+
+* `plantId?`
+* `status?` SUBMITTED|APPROVED|REJECTED
+  (for non-admin, your controller defaults to SUBMITTED)
+* `q?` search term (matches template title or rejectReason)
+* `page?`, `limit?`
+* `sortBy?` submittedAt|reviewedAt|status
+* `sortDir?` ASC|DESC
+
+**Response:** paginated `{ items, page, limit, total }`
+Items are enriched with:
+
+* `template` info (id/title/version/familyId)
+* `answers[].field` metadata
+
+---
+
+### GET `/mobile/forms/submissions/mine`
+
+**Purpose:** current user’s submissions list (enriched).
+**Used by:** Mobile “My submissions” page.
+
+**Query**
+
+* `status?` SUBMITTED|APPROVED|REJECTED
+
+**Response:** array of enriched submissions (not paginated), ordered by submittedAt desc.
+
+---
+
+### GET `/mobile/forms/submissions/{id}`
+
+**Purpose:** submission detail (enriched).
+**Used by:** review detail screen + user detail screen.
+
+**Access rules (from your code)**
+
+* USER: only their own submission
+* MANAGER: must have plantId assigned
+* ADMIN: can access all
+
+**Response:** single enriched submission.
+
+---
+
+### POST `/mobile/forms/submissions/{id}/approve`
+
+**Purpose:** approve submission.
+**Used by:** reviewer action.
+
+**Roles:** ADMIN, MANAGER only.
+**No body**. Response: updated submission (status APPROVED etc.).
+
+---
+
+### POST `/mobile/forms/submissions/{id}/reject`
+
+**Purpose:** reject submission with reason.
+**Used by:** reviewer action.
+
+**Roles:** ADMIN, MANAGER only.
+
+**Body**
+
+```json
+{ "reason": "string" }
+```
+
+**Response:** updated submission (status REJECTED + rejectReason + reviewer metadata).
+
+---
+
+## 7) Dashboard
+
+These are analytics endpoints. I can describe “what they mean” from names, but **for exact payload/response shape, Swagger is the source of truth** (you didn’t paste those controllers/services here).
+
+### GET `/dashboard/summary`
+
+Likely overall counts (templates, submissions, pending).
+
+### GET `/dashboard/recent-submissions`
+
+Likely latest submissions list for quick view.
+
+### GET `/dashboard/plant-summary`
+
+Likely aggregated counts per plant.
+
+### GET `/dashboard/template-summary`
+
+Likely aggregated counts per template/family.
+
+### GET `/dashboard/trends`
+
+Likely time-based trend data.
+
+### GET `/dashboard/pending-aging`
+
+Likely pending (SUBMITTED) grouped by age buckets.
+
+### GET `/dashboard/top-submitters`
+
+Likely users with most submissions.
+
+**Used by:** Admin/Manager dashboards.
+
+---
+
+## 8) Files (MinIO)
+
+### POST `/files/upload`
+
+**Purpose:** upload a file to MinIO (currently hardened for photos only).
+**Used by:** mobile form when filling PHOTO field.
+
+**Query**
+
+* `folder=photos` (whitelist)
+
+**Multipart form-data**
+
+* field name: `file` (binary)
+
+**Response (from FilesService)**
+
+```json
+{
+  "key": "photos/YYYY-MM-DD/<uuid>_filename.ext",
+  "bucket": "factoryflow",
+  "mimeType": "image/jpeg|image/png|image/webp",
+  "size": 12345
+}
+```
+
+**Important:** that `key` is what you store in PHOTO answer value.
+
+---
+
+### GET `/files/signed-url`
+
+**Purpose:** get a temporary download URL for an object key.
+**Used by:** UI to view photos later (don’t expose MinIO directly).
+
+**Query**
+
+* `key=photos/...`
+* `expiresIn?=seconds` (clamped)
+
+**Response**
+
+```json
+{ "key": "...", "expiresInSeconds": 300, "url": "https://..." }
+```
+
+---
+
+# Conclusion: “which API is used when”
+
+### Login (everyone)
+
+* `POST /auth/login`
+
+### Admin setup
+
+* `POST /plants` (create plant)
+* `POST /users/managers` (create manager)
+* `GET /users` / `PATCH /users/{id}` / enable/disable
+
+### Form lifecycle (admin)
+
+* `POST /forms` or `POST /forms/import` → create DRAFT
+* `PATCH /forms/{id}` → edit while DRAFT
+* `POST /forms/{id}/publish` → publish
+* `POST /forms/{id}/clone` → create new version as DRAFT
+* `POST /forms/{id}/archive` → archive published
+* `GET /forms` / `GET /forms/{id}` → view
+
+### Mobile usage (user)
+
+* `GET /mobile/forms?plantId=...` → list published templates
+* `POST /files/upload?folder=photos` → upload photo (if PHOTO field)
+* `POST /mobile/forms/submissions` → submit filled form
+* `GET /mobile/forms/submissions/mine` → view my submissions
+* `GET /files/signed-url?key=photos/...` → view photo
+
+### Review (manager/admin)
+
+* `GET /mobile/forms/submissions` → list submissions to review
+* `GET /mobile/forms/submissions/{id}` → open detail
+* `POST /mobile/forms/submissions/{id}/approve` → approve
+* `POST /mobile/forms/submissions/{id}/reject` → reject with reason
+
+### Dashboard (admin/manager)
+
+* All `/dashboard/*` endpoints for analytics widgets
+
+### Ops/Debug
+
+* `GET /health`
+
+---
+
+If you want, paste **one sample Swagger “Try it out” for each group** (auth/plants/users/forms/mobile/files/dashboard) and I’ll align the exact query parameters + exact schemas 1:1 with your Swagger models (especially dashboard endpoints where the exact response shape lives only in those controllers/services).
