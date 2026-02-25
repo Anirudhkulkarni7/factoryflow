@@ -1,0 +1,192 @@
+Here’s the **Admin Web App flow** in the same style: **which screens**, **why each exists**, and **which APIs they use**, end-to-end.
+
+I’m assuming the web is **ADMIN-only** (as you said), so we design it like a control panel: setup → templates → submissions → analytics.
+
+---
+
+## Admin Web App screens and flow
+
+## 1) Splash / Boot
+
+**Why:** decide where to route (login vs dashboard) and hydrate auth state.
+**Does:** reads token from storage, sets auth headers globally.
+**APIs:** none.
+
+---
+
+## 2) Login
+
+**Why:** Admin entry point.
+**Does:** email/password login, store token, route to dashboard.
+**API:** `POST /auth/login`
+**Output used:** `accessToken`, `user.role` (must be ADMIN).
+
+---
+
+## 3) Admin Dashboard (Home)
+
+**Why:** admin needs “what’s happening right now” in one place.
+**Does:** shows totals + trends + pending review stats, quick links.
+**APIs:** (all or subset depending on widgets)
+
+* `GET /dashboard/summary`
+* `GET /dashboard/recent-submissions`
+* `GET /dashboard/trends`
+* `GET /dashboard/pending-aging`
+* `GET /dashboard/top-submitters`
+* `GET /dashboard/plant-summary`
+* `GET /dashboard/template-summary`
+
+---
+
+## 4) Plants Management
+
+**Why:** everything is plant-scoped (forms, users, submissions).
+**Does:** list plants + create plant.
+**APIs:**
+
+* `GET /plants`
+* `POST /plants` (payload `{ name }`)
+
+---
+
+## 5) Users Management
+
+**Why:** admin controls who can access what (managers/users + plant assignments).
+**Does:** list/search users, create managers, edit users, enable/disable users.
+**APIs:**
+
+* `GET /users` (filters: q, role, plantId, active, page, limit)
+* `POST /users/managers` (create manager with plantIds)
+* `PATCH /users/{id}` (edit name/email/role/plantIds/active)
+* `PATCH /users/{id}/enable`
+* `PATCH /users/{id}/disable`
+
+**UX note:** “Create USER” is manager’s job via `/users/plants/{plantId}/users`, but admin UI can still show it as read-only or add it later if you want.
+
+---
+
+## 6) Forms Templates (Library/List)
+
+**Why:** admin needs a place to manage all templates + their lifecycle.
+**Does:** list templates with filters (status, search), show versioning, actions.
+**APIs:**
+
+* `GET /forms` (q/status/page/limit)
+
+**Actions from list:**
+
+* Open details: `GET /forms/{id}`
+* Clone: `POST /forms/{id}/clone`
+* Archive: `POST /forms/{id}/archive` (only published)
+
+---
+
+## 7) Template Detail / Editor (DRAFT only)
+
+**Why:** to create/edit a template safely before publishing.
+**Does:** form builder UI for fields; edit title/plantIds; field ordering; dropdown options.
+**APIs:**
+
+* Load: `GET /forms/{id}`
+* Save: `PATCH /forms/{id}` (only DRAFT)
+* Publish: `POST /forms/{id}/publish` (only DRAFT + must have fields)
+
+**Important lifecycle rules enforced by backend:**
+
+* Published templates cannot be edited
+* Archive only published templates
+
+---
+
+## 8) Template Import Screen
+
+**Why:** faster creation from Excel → JSON (your Option A import flow).
+**Does:** upload Excel → frontend converts → preview fields → send JSON to backend to create DRAFT.
+**API:**
+
+* `POST /forms/import` (payload: title, plantIds, fields[])
+
+Then admin goes to Template Editor screen to review and publish.
+
+---
+
+## 9) Submissions Review (Admin Review Queue)
+
+**Why:** admin must monitor/override review process (and can review too).
+**Does:** list submissions, filter by plant/status/search, open details.
+**APIs:**
+
+* `GET /mobile/forms/submissions` (admin can see all; supports paging/search/status)
+
+---
+
+## 10) Submission Detail (Review + Evidence)
+
+**Why:** approve/reject decisions need full context: answers + fields + photos + reject reason.
+**Does:** view enriched submission; open photos; approve/reject with reason.
+**APIs:**
+
+* `GET /mobile/forms/submissions/{id}`
+* Photos: `GET /files/signed-url?key=photos/...`
+* Approve: `POST /mobile/forms/submissions/{id}/approve`
+* Reject: `POST /mobile/forms/submissions/{id}/reject` with `{ reason }`
+
+---
+
+## 11) Reports / Analytics (Optional separate screen)
+
+**Why:** dashboards often grow; you may separate dashboards into a “Reports” section.
+**Does:** plant summary, template summary, trends charts, top submitters table.
+**APIs:**
+
+* all `/dashboard/*`
+
+---
+
+## 12) System Status (Optional)
+
+**Why:** quick debug to know if DB/MinIO is alive.
+**Does:** show `/health` results + version info.
+**API:** `GET /health`
+
+---
+
+# Admin web “happy path” flow (real life)
+
+1. Login
+2. Create plants
+3. Create managers (assign plants)
+4. Create/import template (DRAFT)
+5. Edit template → publish
+6. Submissions start coming from mobile users
+7. Admin/manager reviews submissions
+8. Dashboard shows totals/trends/pending
+
+---
+
+# How many web screens total?
+
+### MVP admin web
+
+* Login
+* Dashboard
+* Plants
+* Users
+* Templates list
+* Template editor/detail
+* Import template
+* Submissions list
+* Submission detail
+
+✅ **9 screens** (+ modals)
+
+### Nice-to-have additions
+
+* Reports (separate)
+* Health/status page
+* Audit/logs (future)
+
+➡️ **10–12 screens** eventually.
+
+---

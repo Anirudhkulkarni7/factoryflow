@@ -1,0 +1,11 @@
+* **Monorepo:** `pnpm` workspaces + **Turborepo** (admin web + mobile + shared packages)
+* **Admin Web:** **Next.js** + **React** + **TypeScript**
+* **Mobile (Manager + User):** **Expo (React Native)** + **TypeScript** + **Expo Router**
+* **API layer (shared):** OpenAPI/Swagger generated **typed API client** (used by both apps)
+* **Server-state/data fetching:** **TanStack Query (React Query)** (web + mobile)
+* **Forms + validation:** **react-hook-form** + **zod**
+* **Admin UI components:** **Tailwind CSS** + **shadcn/ui**
+* **Mobile UI styling:** **NativeWind** (Tailwind-style RN) + shared design tokens
+* **Drag & drop form builder (admin):** **dnd-kit**
+* **Auth token storage:** web `localStorage`, mobile `expo-secure-store`
+* **Testing:** **Playwright** (web e2e), **Vitest** + Testing Library (unit), mobile later (Detox optional)

@@ -1,0 +1,69 @@
+Here’s the “Phase 2 / later” feature list — everything that’s **not required for MVP**, but would take your app from “works” to “enterprise-grade form platform”.
+
+## Form capabilities
+
+* **Sections / pages** (group fields into steps, progress indicator)
+* **Conditional logic**
+
+  * show/hide fields based on other answers
+  * conditional required (“required if X is true”)
+* **Advanced validation rules**
+
+  * min/max (number + date)
+  * minLength/maxLength (text)
+  * regex pattern validation
+  * “must be one of” / “must include”
+* **Repeating groups / tables**
+
+  * “add multiple defects/items” with same sub-fields
+* **Computed fields**
+
+  * auto-calculations (qty × rate, scoring, etc.)
+* **Field types expansion**
+
+  * textarea, radio, multiselect, file (non-photo), signature
+  * location/GPS, barcode/QR scan, time picker
+* **Draft submissions (autosave)**
+
+  * save partial form and continue later
+* **Offline-first mobile**
+
+  * fill forms offline, sync when online
+
+## Review workflow upgrades
+
+* **Multi-step approvals** (L1 → L2 approval)
+* **Assignment rules** (auto-assign to manager by plant/shift)
+* **Comments thread** on submissions
+* **Re-open / resubmit** flow after rejection
+
+## Analytics & reporting
+
+* **Export submissions** (CSV/Excel/PDF)
+* **Scheduled reports** (daily/weekly email)
+* **Trends per field** (e.g., defect counts by type)
+* **SLA metrics** (time-to-review, pending aging by plant)
+
+## Template lifecycle / governance
+
+* **Template change history** (audit log: who edited/published/archived)
+* **Role-based permissions per plant** (fine-grained RBAC)
+* **Template approval workflow** (draft needs approval before publish)
+* **Deprecation strategy** (sunset old templates gracefully)
+
+## Attachments & files
+
+* **Multiple photos per field**
+* **Image compression on mobile**
+* **Virus scan / file scanning** (enterprise security)
+* **Retention policies** (auto-delete after X days)
+
+## Platform / ops
+
+* **Rate limiting** (protect APIs)
+* **Structured logging + tracing** (request IDs)
+* **Better error codes** (stable error contract for frontend)
+* **Migration scripts** (instead of `synchronize: true`)
+* **CI/CD pipelines** for web + backend + mobile builds
+
+That’s your “after everything is done” backlog. The first chunk to tackle later (highest ROI) is usually: **sections/pages + advanced validations + conditional required/show**.

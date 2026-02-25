@@ -1,0 +1,183 @@
+
+
+I’ll group it into: **shared screens**, **USER flow screens**, **MANAGER flow screens**, and a couple of optional nice-to-haves.
+
+---
+
+## Shared screens (both USER + MANAGER)
+
+### 1) Splash / Boot screen
+
+**Why:** you need a place to load token + decide where to go (login vs app).
+**Does:** checks if token exists, reads role + plantIds, routes accordingly.
+**APIs:** none (local storage only).
+
+### 2) Login screen
+
+**Why:** entry point for both roles.
+**Does:** email/password login, stores JWT + user info.
+**API:** `POST /auth/login`
+
+### 3) Plant selection screen
+
+**Why:** all mobile flows depend on a `plantId`. Users/managers can have multiple plantIds.
+**Does:** show plants user has access to; user picks one as “active plant”.
+**APIs (2 ways):**
+
+* Preferred: `GET /plants` (show plant names from DB)
+* Or fallback: decode plantIds from token and show only IDs (not great UX)
+
+> For manager: this is essential if they manage multiple plants.
+> For user: if only 1 plant, you can auto-select and skip this screen.
+
+---
+
+## USER screens (form filling + my submissions)
+
+### 4) Home / Published forms list
+
+**Why:** user needs to see what forms are available for their plant.
+**Does:** lists latest published templates; tap to open and fill.
+**API:** `GET /mobile/forms?plantId=...`
+
+### 5) Form fill screen (dynamic renderer)
+
+**Why:** this is the core product: render fields dynamically from template metadata.
+**Does:** shows fields (TEXT/NUMBER/CHECKBOX/DROPDOWN/DATE/PHOTO), validates locally, prepares answers payload.
+**APIs:**
+
+* uses template data already fetched from #4
+* for photo upload (inside this screen): `POST /files/upload?folder=photos`
+* for final submit: `POST /mobile/forms/submissions`
+
+### 6) Submission success screen (or modal)
+
+**Why:** user needs confirmation + next action (back to list / view submission).
+**Does:** show submission id/status + primary actions.
+**APIs:** none (uses response from submit).
+
+### 7) My submissions list
+
+**Why:** user needs history + status tracking.
+**Does:** list their submissions, filter by status (SUBMITTED/APPROVED/REJECTED), search optional.
+**API:** `GET /mobile/forms/submissions/mine?status=...`
+
+### 8) My submission detail
+
+**Why:** user wants to open what they submitted, and see review outcome/reject reason.
+**Does:** shows template title + answers + review status + reject reason.
+**APIs:**
+
+* `GET /mobile/forms/submissions/{id}`
+* for photos: `GET /files/signed-url?key=photos/...`
+
+---
+
+## MANAGER screens (review submissions)
+
+### 9) Review queue screen (submissions list)
+
+**Why:** manager’s main job is to review incoming submissions for their plant(s).
+**Does:** shows submissions filtered to manager’s plantIds; default view should be “SUBMITTED”. Add filters: plant, status, search.
+**API:** `GET /mobile/forms/submissions`
+
+* Manager will typically call with:
+
+  * `plantId=...` (if plant selected)
+  * `status=SUBMITTED` (or rely on default behavior you already coded)
+
+### 10) Review submission detail
+
+**Why:** manager must inspect answers + photos before making a decision.
+**Does:** shows enriched submission (template + field metadata) and answers; view photo; show approve/reject actions.
+**APIs:**
+
+* `GET /mobile/forms/submissions/{id}`
+* `GET /files/signed-url?key=photos/...`
+
+### 11) Reject reason screen (small modal/screen)
+
+**Why:** rejection needs a reason (your backend supports `reason`).
+**Does:** collect reason text, submit reject.
+**API:** `POST /mobile/forms/submissions/{id}/reject` with `{ reason }`
+
+### 12) Approve confirm (modal)
+
+**Why:** approvals should be deliberate (avoid accidental taps).
+**Does:** confirm action and call approve.
+**API:** `POST /mobile/forms/submissions/{id}/approve`
+
+### 13) Review history screen (optional but useful)
+
+**Why:** managers often need to see what happened after review, not only pending.
+**Does:** same as review queue but status filter defaults to APPROVED/REJECTED.
+**API:** `GET /mobile/forms/submissions?status=APPROVED` and `...REJECTED`
+
+> You can merge 9 + 13 into one screen with tabs: Pending | Approved | Rejected.
+
+---
+
+## Shared utility screens (optional but practical)
+
+### 14) Profile / Logout
+
+**Why:** show logged-in user + role + active plant; logout.
+**Does:** clear token, go to login.
+**APIs:** none.
+
+### 15) Photo viewer screen (optional)
+
+**Why:** better UX for photos (zoom/rotate).
+**Does:** open a signed URL in an image viewer.
+**API:** uses already-fetched signed url (or calls `GET /files/signed-url` when opening).
+
+---
+
+# So how many screens total?
+
+If you keep it clean and minimal:
+
+### Minimum (recommended MVP)
+
+**Shared:** 3
+
+1. Splash
+2. Login
+3. Plant Select (auto-skip if 1 plant)
+
+**USER:** 4
+4) Forms List
+5) Form Fill
+6) My Submissions List
+7) Submission Detail
+(+ success modal inside fill)
+
+**MANAGER:** 2–3
+8) Review Queue (with tabs for statuses)
+9) Review Detail
+10) Reject Reason modal
+
+✅ Total MVP: **9–10 screens** (counting reject reason as a modal/screen)
+
+### Full (nice UX)
+
+Add profile + photo viewer + dedicated success screen + review history separated:
+➡️ **12–15 screens**
+
+---
+
+# Why this structure is correct for your backend
+
+Because your API surface already tells us the “jobs” the UI must perform:
+
+* `/mobile/forms` → needs a “published forms list” screen
+* `/mobile/forms/submissions` → needs submission creation + review list/detail screens
+* `/mobile/forms/submissions/mine` → needs user history screen
+* `/files/upload` + `/files/signed-url` → needs photo upload + viewing UX
+* roles + plantIds in JWT → requires plant selection + role-based navigation
+
+No extra fantasy features required.
+
+---
+
+If you want next, I’ll outline the **exact navigation structure** (stacks/tabs) for React Native so the manager/user experience feels natural, not like two apps duct-taped together.
