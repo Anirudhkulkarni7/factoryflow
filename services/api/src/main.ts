@@ -1,10 +1,15 @@
-import { ValidationPipe } from "@nestjs/common";
-import { NestFactory } from "@nestjs/core";
-import { AppModule } from "./app.module";
-import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.enableCors({
+    origin: ['http://localhost:3000'],
+    credentials: true,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -14,22 +19,22 @@ async function bootstrap() {
     }),
   );
   const config = new DocumentBuilder()
-  .setTitle("FactoryFlow API")
-  .setDescription("Backend APIs for FactoryFlow")
-  .setVersion("1.0")
-  .addBearerAuth(
-    { type: "http", scheme: "bearer", bearerFormat: "JWT" },
-    "bearer"
-  )
-  .build();
+    .setTitle('FactoryFlow API')
+    .setDescription('Backend APIs for FactoryFlow')
+    .setVersion('1.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'bearer',
+    )
+    .build();
 
-const document = SwaggerModule.createDocument(app, config);
+  const document = SwaggerModule.createDocument(app, config);
 
-document.security = [{ bearer: [] }];
+  document.security = [{ bearer: [] }];
 
-SwaggerModule.setup("docs", app, document);
+  SwaggerModule.setup('docs', app, document);
 
-  await app.listen(3000);
+  await app.listen(3001);
 
   const server: any = app.getHttpAdapter().getInstance();
   const stack = server?._router?.stack ?? [];

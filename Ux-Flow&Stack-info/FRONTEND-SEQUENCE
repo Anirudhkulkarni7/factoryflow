@@ -1,0 +1,248 @@
+Alright. Here’s the **full build sequence** (web + mobile), in the exact order that keeps things scalable and avoids rework. Treat this like your “master checklist”.
+
+---
+
+## Phase 0 — Foundation (done ✅)
+
+* Monorepo created (`apps/`, `packages/`)
+* Admin web running (Next)
+* Mobile running (Expo)
+* Backend running on 3001 + CORS fixed
+* Shared `@factoryflow/api-client` working
+* You can open: `http://localhost:3000/forms`
+
+---
+
+# Phase 1 — Admin Web (MVP) in sequence
+
+## 1) Web Auth (proper)
+
+* Create `/login` page (not inside `/page.tsx`)
+* Store token in `localStorage`
+* Add **route guard** (if no token → redirect to login)
+* Create `/logout` action
+* Add a simple **Topbar** showing logged-in user
+
+**APIs:** `POST /auth/login`
+
+---
+
+## 2) Web Layout + Navigation
+
+* Sidebar routes:
+
+  * Dashboard
+  * Plants
+  * Users
+  * Forms
+  * Submissions
+  * (Health optional)
+* Create a shared layout component (so all pages look consistent)
+
+---
+
+## 3) Forms module (Admin) — core feature
+
+### 3.1 Forms List ✅ (you started)
+
+* list templates + filters (q, status, paging)
+  **API:** `GET /forms`
+
+### 3.2 Form Detail (read-only view)
+
+* open template details (fields list, plant scope)
+  **API:** `GET /forms/{id}`
+
+### 3.3 Create New Form (Drag & Drop Builder)
+
+* add fields
+* reorder fields (dnd-kit)
+* edit field config (dropdown options)
+* save as DRAFT
+  **API:** `POST /forms`
+
+### 3.4 Edit Draft Form
+
+* update title/plantIds/fields
+  **API:** `PATCH /forms/{id}`
+
+### 3.5 Publish / Clone / Archive
+
+* publish DRAFT
+* clone published → new DRAFT version
+* archive published
+  **APIs:**
+* `POST /forms/{id}/publish`
+* `POST /forms/{id}/clone`
+* `POST /forms/{id}/archive`
+
+### 3.6 Import Form (Excel→JSON)
+
+* upload excel in UI → convert → preview → send JSON
+  **API:** `POST /forms/import`
+
+---
+
+## 4) Plants module (Admin)
+
+* list plants
+* create plant
+  **APIs:** `GET /plants`, `POST /plants`
+
+---
+
+## 5) Users module (Admin)
+
+* users list + filters
+* create manager (assign plantIds)
+* edit user (role, plantIds, active)
+* enable/disable
+  **APIs:**
+* `GET /users`
+* `POST /users/managers`
+* `PATCH /users/{id}`
+* `PATCH /users/{id}/enable`
+* `PATCH /users/{id}/disable`
+
+---
+
+## 6) Submissions module (Admin review)
+
+* list submissions (filters: plantId/status/search/pagination)
+* submission detail (with template+field meta)
+* approve / reject with reason
+* photo view
+  **APIs:**
+* `GET /mobile/forms/submissions`
+* `GET /mobile/forms/submissions/{id}`
+* `POST /mobile/forms/submissions/{id}/approve`
+* `POST /mobile/forms/submissions/{id}/reject`
+* `GET /files/signed-url`
+
+---
+
+## 7) Dashboard (Admin)
+
+* build widgets for:
+
+  * summary
+  * trends
+  * recent submissions
+  * pending aging
+  * plant summary
+  * template summary
+  * top submitters
+    **APIs:** all `/dashboard/*`
+
+---
+
+## 8) Web polish (scalable feel)
+
+* TanStack Query everywhere (caching + loading states)
+* global error handling
+* consistent UI components (table, modal, toast)
+* pagination/search components reused
+
+---
+
+# Phase 2 — Mobile App (MVP) in sequence
+
+## 1) Mobile Auth
+
+* login screen
+* store token in secure storage (Expo SecureStore)
+* role-based navigation (USER vs MANAGER)
+  **API:** `POST /auth/login`
+
+---
+
+## 2) Plant selection (shared)
+
+* show plants user has access to
+* store selected plantId locally
+  **API:** `GET /plants` (or decode from token, but better to show names)
+
+---
+
+## 3) USER flow (forms filling)
+
+### 3.1 Published Forms List
+
+* show templates for selected plant
+  **API:** `GET /mobile/forms?plantId=...`
+
+### 3.2 Form Fill Screen (dynamic renderer)
+
+* render TEXT/NUMBER/CHECKBOX/DROPDOWN/DATE/PHOTO
+* local validation
+* photo upload inside form
+  **API:** `POST /files/upload?folder=photos`
+
+### 3.3 Submit
+
+**API:** `POST /mobile/forms/submissions`
+
+### 3.4 My Submissions
+
+* list mine + filters by status
+  **API:** `GET /mobile/forms/submissions/mine`
+
+### 3.5 Submission Detail + photo view
+
+**APIs:**
+
+* `GET /mobile/forms/submissions/{id}`
+* `GET /files/signed-url`
+
+---
+
+## 4) MANAGER flow (review)
+
+### 4.1 Review queue
+
+* list submissions (default SUBMITTED)
+* filter by plant/status/search
+  **API:** `GET /mobile/forms/submissions`
+
+### 4.2 Review detail
+
+**API:** `GET /mobile/forms/submissions/{id}`
+
+### 4.3 Approve/Reject
+
+**APIs:**
+
+* `POST /mobile/forms/submissions/{id}/approve`
+* `POST /mobile/forms/submissions/{id}/reject`
+
+---
+
+## 5) Mobile polish
+
+* TanStack Query
+* offline-friendly UX later (optional)
+* photo viewer UX (zoom)
+
+---
+
+# Phase 3 — “After MVP” features (later)
+
+* sections/pages, advanced validations
+* conditional fields
+* repeating groups
+* computed fields
+* export/reporting
+* offline-first sync
+
+---
+
+## What you should do next *right now* (next 3 tasks)
+
+1. **Move login out of `/page.tsx`** → create `/login` route + auth guard
+2. **Add TanStack Query to admin-web** (so all API calls are scalable)
+3. Finish the admin **Forms List** properly:
+
+   * search + status filter + pagination
+   * click row → go to `/forms/[id]` detail
+
+If you want, I’ll start with **Task 1** and give you the exact files to create (one by one) for `/login` + route guard, with minimal code.
