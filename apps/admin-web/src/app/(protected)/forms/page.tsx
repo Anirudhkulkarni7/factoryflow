@@ -149,6 +149,12 @@ export default function FormsPage() {
           >
             {query.isFetching ? "Refreshing..." : "Refresh"}
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => router.push("/forms/import")}
+          >
+            Import (Excel)
+          </Button>
         </div>
       </div>
 
