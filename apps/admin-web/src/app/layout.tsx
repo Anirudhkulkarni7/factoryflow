@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 import { QueryProvider } from "@/components/providers/QueryProvider";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "FactoryFlow Admin",
@@ -26,6 +27,7 @@ export default function RootLayout({
         >
           <QueryProvider>{children}</QueryProvider>
         </ThemeProvider>
+        <Toaster />
       </body>
     </html>
   );
