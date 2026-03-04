@@ -38,15 +38,23 @@ export async function apiFetch<T>(
   const data = text ? safeJson(text) : null;
 
   if (!res.ok) {
-    let msg = `Request failed (${res.status})`;
-    if (isRecord(data)) {
-      const m = data["message"];
-      const e = data["error"];
-      if (typeof m === "string") msg = m;
-      else if (typeof e === "string") msg = e;
+  let msg = `Request failed (${res.status})`;
+
+  if (isRecord(data)) {
+    const m = data["message"];
+    const e = data["error"];
+
+    if (Array.isArray(m)) {
+      msg = m.map((x) => String(x)).join("\n");
+    } else if (typeof m === "string") {
+      msg = m;
+    } else if (typeof e === "string") {
+      msg = e;
     }
-    throw new ApiError(msg, res.status, data);
   }
+
+  throw new ApiError(msg, res.status, data);
+}
 
   return data as T;
 }
