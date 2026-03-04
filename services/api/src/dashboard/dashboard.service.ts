@@ -155,13 +155,21 @@ export class DashboardService {
     page?: number;
     limit?: number;
   }) {
-    const page = input.page ?? 1;
-    const limit = input.limit ?? 20;
+    const rawPage = Number.isFinite(input.page ?? NaN) ? Number(input.page) : 1;
+    const rawLimit = Number.isFinite(input.limit ?? NaN)
+      ? Number(input.limit)
+      : 20;
+
+    const page = rawPage >= 1 ? Math.floor(rawPage) : 1;
+    const limit = rawLimit >= 1 ? Math.floor(rawLimit) : 20;
+
+    if (limit > 100) {
+      throw new BadRequestException('limit must not be greater than 100');
+    }
 
     const filter = this.resolvePlantFilter(input);
 
-    // Base query
-    const base = this.submissions
+    const itemsQb = this.submissions
       .createQueryBuilder('s')
       .leftJoin(FormTemplate, 't', 't.id = s.templateId')
       .select([
@@ -178,33 +186,50 @@ export class DashboardService {
       ])
       .orderBy('s.submittedAt', 'DESC');
 
-    if (input.status)
-      base.andWhere('s.status = :status', { status: input.status });
+    if (input.status) {
+      itemsQb.andWhere('s.status = :status', { status: input.status });
+    }
 
     if (filter.mode === 'ADMIN') {
-      if (filter.plantId)
-        base.andWhere('s.plantId = :plantId', { plantId: filter.plantId });
+      if (filter.plantId) {
+        itemsQb.andWhere('s.plantId = :plantId', { plantId: filter.plantId });
+      }
     } else {
-      base.andWhere('s.plantId = ANY(:plantIds)', {
+      itemsQb.andWhere('s.plantId = ANY(:plantIds)', {
         plantIds: filter.plantIds,
       });
     }
 
-    // Items
-    const items = await base
-      .clone()
-      .offset((page - 1) * limit)
-      .limit(limit)
-      .getRawMany();
+    const countQb = this.submissions.createQueryBuilder('s');
 
-    // Total
-    const total = await base
-      .clone()
-      .select('COUNT(*)', 'cnt')
-      .getRawOne<{ cnt: string }>();
-    const totalNum = Number(total?.cnt ?? 0);
+    if (input.status) {
+      countQb.andWhere('s.status = :status', { status: input.status });
+    }
 
-    return { items, page, limit, total: totalNum };
+    if (filter.mode === 'ADMIN') {
+      if (filter.plantId) {
+        countQb.andWhere('s.plantId = :plantId', { plantId: filter.plantId });
+      }
+    } else {
+      countQb.andWhere('s.plantId = ANY(:plantIds)', {
+        plantIds: filter.plantIds,
+      });
+    }
+
+    const [items, totalRow] = await Promise.all([
+      itemsQb
+        .skip((page - 1) * limit)
+        .take(limit)
+        .getRawMany(),
+      countQb.select('COUNT(*)', 'cnt').getRawOne<{ cnt: string }>(),
+    ]);
+
+    return {
+      items,
+      page,
+      limit,
+      total: Number(totalRow?.cnt ?? 0),
+    };
   }
 
   async getPlantSummary(input: {
@@ -357,7 +382,11 @@ export class DashboardService {
       });
     }
 
-    const items = await qb.getRawMany();
+    const raw = await qb.getRawMany<{ bucket: string; count: string }>();
+    const items = raw.map((r) => ({
+      bucket: r.bucket,
+      count: Number(r.count ?? 0),
+    }));
     return { items };
   }
 
