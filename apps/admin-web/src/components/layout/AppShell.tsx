@@ -49,7 +49,7 @@ export function AppShell({ children }: AppShellProps) {
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-20 h-14 border-b bg-background">
         <div className="mx-auto flex h-14 max-w-screen-2xl items-center justify-between px-4">
-          <div className="font-semibold">FactoryFlow</div>
+          <div className="font-semibold">FloorOps</div>
 
           <div className="flex items-center gap-3">
             <ModeToggle />
