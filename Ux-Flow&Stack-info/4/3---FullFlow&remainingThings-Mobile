@@ -1,0 +1,453 @@
+Sure. Here’s the **full “what we built so far + how to use it end-to-end + what’s left”** checklist in one place.
+
+---
+
+## What we have done so far (Admin Web + Backend + Infra)
+
+### Monorepo + tooling
+
+* Created **industry-style monorepo** at `D:\factoryflow`
+* Structure:
+
+  * `services/api` = NestJS backend (Postgres + MinIO)
+  * `apps/admin-web` = Next.js Admin UI (TS + shadcn/ui + Tailwind v4)
+  * `apps/mobile` = Expo RN app (future work)
+  * `packages/api-client` = shared typed client package (used by web + mobile)
+  * `packages/shared`, `packages/tokens` = reserved for future shared stuff
+* Setup:
+
+  * **pnpm workspaces** (`pnpm-workspace.yaml`)
+  * **turborepo** (`turbo.json`)
+  * root `.gitignore`
+* Backend runs on **`http://localhost:3001`**
+* Admin Web runs on **`http://localhost:3000`**
+* CORS enabled for web origin
+
+---
+
+## Admin Web (Phase 1 MVP) done
+
+### 1) Auth + Guard + Layout
+
+* `/login` route with shadcn UI + react-hook-form + zod
+* Token stored in `localStorage` key **`ff_admin_token`**
+* Protected routes redirect to `/login` if token missing
+* `/logout` clears token and session user
+* Global layout:
+
+  * **Topbar** with username/email + theme toggle + logout
+  * **Sidebar** navigation
+  * Sidebar fixed, only content scrolls
+  * Sidebar width adjustable (`w-56`)
+
+---
+
+### 2) Navigation pages working
+
+Sidebar routes exist and work:
+
+* Dashboard
+* Plants
+* Users
+* Forms
+* Submissions
+
+---
+
+### 3) Forms module (Admin)
+
+You can now:
+
+* View forms list (with the backend paging/search rules as-is)
+* Open **Form Detail** (shows title, status, fields nicely)
+* Create **New Form (Builder)**:
+
+  * Add fields
+  * Configure field settings
+  * Preview in mobile style
+  * Save Draft (payload normalized to match backend DTO)
+* Edit Draft form:
+
+  * Update title, plants, fields (mapped correctly to backend DTO)
+* Publish / Clone / Archive:
+
+  * Admin can change lifecycle and see it reflected
+* Import Form from Excel:
+
+  * Parse normal Excel or “raw data Excel” (infer fields)
+  * Edit imported fields (type/required/options)
+  * Create draft from Excel
+
+---
+
+### 4) Plants module (Admin)
+
+You can:
+
+* List plants
+* Create plant via modal
+* (Backend pagination/search not fixed yet — you decided to handle later)
+
+---
+
+### 5) Users module (Admin)
+
+You can:
+
+* List users
+* Create manager (name/email/password + plantIds)
+* Enable/disable user
+* Update manager plant assignments
+* Server-side pagination implemented here (because backend supports it)
+
+Also improved:
+
+* API error toast shows actual backend validation messages (not only “Bad request”)
+
+---
+
+### 6) Submissions module (Admin Review)
+
+You can:
+
+* List submissions
+* Open submission detail page with human-friendly UI:
+
+  * Form title, status, plant, submittedBy
+  * Answers shown as Question → Answer table
+* Approve submission
+* Reject submission with reason dialog
+* Photo view:
+
+  * PHOTO answers show “View photo”
+  * Uses `/files/signed-url` to display image
+
+---
+
+### 7) Dashboard (Admin) – real APIs
+
+Dashboard uses real backend endpoints:
+
+* `/dashboard/summary`
+* `/dashboard/plant-summary`
+* `/dashboard/template-summary`
+* `/dashboard/trends`
+* `/dashboard/pending-aging`
+* `/dashboard/top-submitters`
+* (recent-submissions endpoint needs backend fix if still 500)
+
+Dashboard UI now shows:
+
+* KPI cards
+* Status distribution
+* Trend chart (mini line)
+* Pending aging bars
+* Top plants, top forms, top submitters
+* Uses real date window returned by backend
+
+---
+
+## How to use the website end-to-end (Admin flow)
+
+Here is the “normal workflow” from start to end:
+
+1. **Login**
+
+* Go `http://localhost:3000/login`
+* Login using admin credentials
+* You land in protected area
+
+2. **Plants**
+
+* Go to Plants
+* Create plants (ex: Bangalore, Jaipur)
+* These plants later become scope for forms and managers
+
+3. **Users**
+
+* Create Managers and assign plants
+* Enable/disable them if needed
+
+4. **Forms**
+
+* Create a new form draft using Builder OR Excel import
+* Assign plantIds (which plants this form is valid for)
+* Save Draft
+* Publish when ready
+* Clone when you want a new version of a published form
+* Archive if form is no longer needed
+
+5. **Mobile users submit**
+
+* Users fill published forms on mobile (next phase)
+* Submissions come into queue
+
+6. **Submissions Review**
+
+* Admin/Manager opens Submissions
+* Reviews answers + photo proof
+* Approves or rejects with reason
+
+7. **Dashboard**
+
+* Admin views overall metrics and operational trends
+
+That’s the complete Admin workflow.
+
+---
+
+## Backend endpoints used so far (important list)
+
+### Auth
+
+* `POST /auth/login`
+
+### Plants
+
+* `GET /plants`
+* `POST /plants`
+
+### Users
+
+* `GET /users`
+* `POST /users/managers`
+* `PATCH /users/{id}`
+* `PATCH /users/{id}/enable`
+* `PATCH /users/{id}/disable`
+
+### Forms (Admin)
+
+* `GET /forms`
+* `GET /forms/{id}`
+* `POST /forms`
+* `PATCH /forms/{id}`
+* `POST /forms/{id}/publish`
+* `POST /forms/{id}/clone`
+* `POST /forms/{id}/archive`
+* `POST /forms/import` (or create draft via import UI)
+
+### Submissions (Admin + Mobile)
+
+* `GET /mobile/forms/submissions`
+* `GET /mobile/forms/submissions/{id}`
+* `POST /mobile/forms/submissions/{id}/approve`
+* `POST /mobile/forms/submissions/{id}/reject`
+* `POST /mobile/forms/submissions` (create submission for testing)
+
+### Files
+
+* `POST /files/upload?folder=photos`
+* `GET /files/signed-url?key=...`
+
+### Dashboard
+
+* `GET /dashboard/summary`
+* `GET /dashboard/recent-submissions` (needs backend fix if 500)
+* `GET /dashboard/plant-summary`
+* `GET /dashboard/template-summary`
+* `GET /dashboard/trends`
+* `GET /dashboard/pending-aging`
+* `GET /dashboard/top-submitters`
+
+---
+
+## What is remaining now (according to plan)
+
+### Phase 1 remaining (Admin)
+
+* Fix backend 500 for `/dashboard/recent-submissions` (if not fixed yet)
+* Optional polish:
+
+  * better charts (Recharts)
+  * better filters (date range selector, plant filter dropdown)
+  * more user-friendly mapping for submitters/plants everywhere
+
+But functionally, Admin MVP is basically complete.
+
+---
+
+# Next Major Phase: Phase 2 — Mobile App (Expo) MVP
+
+## What mobile will be able to do (USER role)
+
+1. Mobile login (SecureStore token)
+2. Plant selection (from plants list or token plantIds)
+3. List published forms for selected plant
+4. Fill a form dynamically:
+
+   * TEXT / NUMBER / DATE / CHECKBOX / DROPDOWN / PHOTO
+5. Upload photo proof:
+
+   * `POST /files/upload?folder=photos`
+6. Submit form:
+
+   * `POST /mobile/forms/submissions`
+7. “My submissions” screen:
+
+   * `GET /mobile/forms/submissions/mine`
+8. Submission detail + photo view (signed-url)
+
+## What mobile will be able to do (MANAGER role)
+
+1. Login
+2. Select plant
+3. Review queue:
+
+   * `GET /mobile/forms/submissions` (filtered by status/plant)
+4. Review detail (same detail API)
+5. Approve/reject with reason
+
+---
+
+## Mobile endpoints we will use next
+
+* `POST /auth/login`
+* `GET /plants` (to show names + ids)
+* `GET /mobile/forms?plantId=...`
+* `POST /files/upload?folder=photos`
+* `POST /mobile/forms/submissions`
+* `GET /mobile/forms/submissions/mine`
+* `GET /mobile/forms/submissions`
+* `GET /mobile/forms/submissions/{id}`
+* `GET /files/signed-url`
+* approve/reject endpoints (manager)
+
+---
+
+## Next step you should start now
+
+✅ **Phase 2 → 1) Mobile Auth**
+
+* Expo Router routes
+* login screen
+* secure token storage
+* role-based navigation (USER vs MANAGER)
+
+When you’re ready, I’ll give you the exact files and code for mobile auth in **small steps** (one task at a time).
+
+
+*******************************************************************************************************************************8
+
+Nice — mobile is running now. ✅
+Here’s the clean status + the exact next plan.
+
+## What we finished (so far)
+
+### 1) Monorepo + infra (done)
+
+* `D:\factoryflow` pnpm workspaces + turborepo
+* Backend `services/api` (NestJS) running at `http://localhost:3001`
+* Postgres + MinIO working
+* CORS working for admin web
+
+### 2) Admin Web MVP (done)
+
+* Auth: `/login`, token in `localStorage: ff_admin_token`, guards + `/logout`
+* Layout: topbar + theme toggle + sidebar
+* Pages working: Dashboard / Plants / Users / Forms / Submissions
+
+### 3) Admin features (done)
+
+* **Plants:** list + create (pagination/search left for backend later)
+* **Users:** list, create manager, enable/disable, assign plants, good error toasts
+* **Forms:** list + detail, builder (add/configure fields + preview), save/edit draft, publish/clone/archive, Excel import (normal + raw infer)
+* **Submissions:** list + detail, approve/reject with reason, photo view using signed-url
+* **Dashboard:** real APIs wired (recent-submissions may still need backend fix if 500)
+
+### 4) Mobile setup (done)
+
+* Expo app boots on your phone
+* SDK mismatch solved (USB + press `a`)
+
+---
+
+## What is remaining (what we should do next)
+
+## Phase 2 (Mobile MVP) — this is the main work now
+
+### Step 1: Mobile Auth (NEXT)
+
+Goal: login + store token + route by role.
+
+**Build:**
+
+* Login screen (same `/auth/login`)
+* Save token in **SecureStore** (not localStorage)
+* Decode token to get role (USER vs MANAGER)
+* Role-based navigation:
+
+  * USER → Forms + My Submissions
+  * MANAGER → Review Queue + Approve/Reject
+
+✅ After this, mobile becomes a real app, not just “running”.
+
+---
+
+### Step 2: Plant selection
+
+* Fetch plants (`GET /plants`)
+* Show plant picker
+* Store selected plantId (SecureStore or in app state)
+
+---
+
+### Step 3: Published forms list (per plant)
+
+* `GET /mobile/forms?plantId=...` (we’ll implement if not existing yet)
+* Show cards/list of published forms
+
+---
+
+### Step 4: Dynamic form renderer
+
+Render form fields based on template schema:
+
+* TEXT, NUMBER, DATE, CHECKBOX, DROPDOWN, PHOTO
+* Required validation before submit
+
+---
+
+### Step 5: Photo upload pipeline
+
+* Take photo (camera/gallery)
+* Upload to MinIO using `POST /files/upload?folder=photos`
+* Store returned `key` in the answer payload
+
+---
+
+### Step 6: Submit form
+
+* `POST /mobile/forms/submissions`
+* Success screen + navigate to “My Submissions”
+
+---
+
+### Step 7: “My Submissions”
+
+* `GET /mobile/forms/submissions/mine`
+* List + detail view + photo view
+
+---
+
+### Step 8: Manager review flow
+
+* Queue: `GET /mobile/forms/submissions` (filter by plant/status)
+* Detail: `GET /mobile/forms/submissions/{id}`
+* Actions:
+
+  * Approve: `POST /mobile/forms/submissions/{id}/approve`
+  * Reject: `POST /mobile/forms/submissions/{id}/reject` (with reason)
+
+---
+
+## Immediate next task (start now)
+
+**Mobile Auth + Role-based routing**.
+
+If you say “start mobile auth”, I’ll give:
+
+* exact folder/file paths under `apps/mobile`
+* commands to install needed libs
+* code step-by-step (no big dump)
+26/3/26
+
