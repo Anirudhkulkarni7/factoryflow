@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { Repository ,In } from "typeorm";
 import { Plant } from "../entities/plant.entity";
 
 @Injectable()
@@ -17,4 +17,12 @@ export class PlantsService {
   findAll() {
     return this.plants.find({ order: { createdAt: "DESC" } });
   }
+  findByIds(ids: string[]) {
+  if (!ids?.length) return [];
+  return this.plants.find({
+    where: { id: In(ids) },
+    order: { name: "ASC" },
+  });
+}
+
 }
